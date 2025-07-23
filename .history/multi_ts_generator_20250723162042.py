@@ -1,9 +1,11 @@
+#!/usr/bin/env python3
 """
 =============================================================================
-MULTIVARIATE TIME SERIES GENERATOR
+MULTIVARIATE TIME SERIES GENERATOR (MINIMAL EXTENSION)
 =============================================================================
 
-PURPOSE: Extension of ts_generator.py to support multivariate time series, no visualization
+PURPOSE: Minimal extension of ts_generator.py to support multivariate time series.
+         Same AR(1) model, same shift timing, just multiple dimensions.
 
 MODEL: Y_t = α * Y_{t-1} + trend * t + ε_t (same as ts_generator)
        where Y_t is now d-dimensional instead of univariate
@@ -21,9 +23,9 @@ DEFAULT VALUES: Same as ts_generator except d=2
 - T=30, ar_coef=0.7, noise_std=0.2, shift_amount=2.0, shift_time=0
 
 USAGE:
-  python multi_ts_generator.py                # 2D version of ts_generator  
-  python multi_ts_generator.py --d 1          # Same as ts_generator
-  python multi_ts_generator.py --d 3          # 3D extension
+  python multivariate_ts_generator.py                # 2D version of ts_generator  
+  python multivariate_ts_generator.py --d 1          # Same as ts_generator
+  python multivariate_ts_generator.py --d 3          # 3D extension
 =============================================================================
 """
 
