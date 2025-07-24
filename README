@@ -1,0 +1,64 @@
+# Conformal Prediction for Time Series with Covariate Shift
+
+This repository implements adaptive conformal prediction methods for time series forecasting under covariate shift.
+
+
+#### `ts_generator.py`
+**Basic time series generator with visualization**
+- **Purpose**: Generate AR(1) time series with optional covariate shift
+- **Features**:
+  - AR(1) process: `Y_t = α * Y_{t-1} + ε_t`
+  - Covariate shift introduction at specified time points
+  - Likelihood ratio computation
+  - Built-in visualization capabilities
+
+#### `multi_ts_generator.py` 
+**Generator with multiple covariates**
+- **Purpose**: Extension to multivariate time series
+- **Features**:
+  - Multiple covariate
+  - More complex shift patterns
+
+#### `algorithm.py`
+**Main research contribution - Adapted CAFHT algorithm**
+- **Purpose**: Novel weighted conformal prediction for covariate shift
+- **Key Innovation**: Likelihood ratio weighted quantiles
+- **Features**:
+  - Data splitting for shift scenarios
+  - Weighted conformal prediction intervals
+  - Online prediction capabilities
+  - Coverage tracking and validation
+- **Theory**: Maintains valid coverage under covariate shift
+
+#### `basic_conformal.py` 
+**Standard conformal prediction for comparison**
+- **Purpose**: Baseline to compare against your algorithm
+- **Features**:
+  - Classic conformal prediction implementation
+  - AR(1) model fitting
+  - Standard quantile-based intervals
+  - Coverage evaluation
+- **Usage**: Demonstrates what happens WITHOUT covariate shift correction
+
+✅ **Completed:**
+1. Data generation framework (`ts_generator.py`)
+2. Enhanced data generation (`multi_ts_generator.py`) 
+3. Main algorithm implementation (`algorithm.py`)
+4. Baseline comparison method (`basic_conformal.py`)
+
+🔄 **Current Phase:**
+- Testing algorithms on time series with covariate shift
+- Validating both methods achieve proper coverage
+- Establishing baseline performance
+
+📋 **Next Steps:**
+1. ✅ Validate algorithms work on regular data
+2. 🔄 Test with covariate shift (your algorithm should maintain coverage)
+3. 📊 Compare performance (coverage, efficiency, robustness)
+4. 📈 Generate results and visualizations
+
+## Dependencies
+
+- `numpy` - Numerical computations
+- `matplotlib` - Visualization  
+- `scipy` - Statistical functions
