@@ -135,6 +135,34 @@ class TimeSeriesGenerator:
                 time_factor = (t - start_idx) / max(end_idx - start_idx - 1, 1)
                 shift = shift_strength * time_factor * np.sin(2 * np.pi * time_factor)
                 shifted_data[:, t, :] += shift
+
+        elif shift_type == 'outlier_injection':
+            # randomly inject large outliers into a fraction of covariates
+            frac = shift_params.get('outlier_frac', 0.05)
+            magnitude = shift_params.get('outlier_mag', 5.0)
+            mask = np.random.rand(n, *(1,)* (d+1)) < frac
+            noise = np.random.choice([-1,1], size=mask.shape) * magnitude
+            shifted_data[:, time_mask, :][mask[:, time_mask, :]] += noise[mask]
+        
+        elif shift_type == 'trend_change':
+            # add a linear trend after shift_time
+            new_trend = shift_params.get('new_trend_coef', 0.5)
+            for t in range(shift_time, T_plus_1 - 1):
+                shifted_data[:, t, :] += new_trend * (t - shift_time)
+        
+        elif shift_type == 'noise_increase':
+            # increase noise std after shift
+            factor = shift_params.get('noise_factor', 5.0)
+            base_noise = np.random.normal(0, model_params.get('noise_std',0.1)*factor, (n,d))
+            shifted_data[:, time_mask, :] += base_noise[:,None,:] if d>1 else base_noise[:,None]
+        
+        elif shift_type == 'seasonal_shift':
+            # add seasonal (sinusoidal) component
+            period = shift_params.get('season_period', 12)
+            amp = shift_params.get('season_amp', 1.0)
+            times = np.arange(time_mask.start or 0, time_mask.stop)
+            seasonal = amp * np.sin(2*np.pi*(times - (shift_time or 0)) / period)
+            shifted_data[:, time_mask, 0] += seasonal
         
         # Step 2: Regenerate time points after the shift using the same conditional model
         if shift_time == 0:
