@@ -374,7 +374,7 @@ def main():
     try:
         import sys
         sys.path.append('.')
-        from ts_generator import TimeSeriesGenerator
+        from fixed_ts_generator import TimeSeriesGenerator
         
         print("Using real time series data with covariate shift...")
         
