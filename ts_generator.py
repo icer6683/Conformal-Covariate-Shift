@@ -4,36 +4,40 @@
 UNIVARIATE TIME SERIES GENERATOR WITH VISUALIZATION
 =============================================================================
 
-PURPOSE: Generate univariate AR(1) time series with covariate shift and 
-         comprehensive visualization for understanding conformal prediction concepts.
+PURPOSE: Generate univariate AR(1) time series driven by a time‐invariant
+         Poisson covariate, plus comprehensive visualization for understanding
+         conformal prediction concepts under covariate shift.
 
-MODEL: Y_t = α * Y_{t-1} + trend * t + ε_t
-       where α is AR coefficient, trend is linear trend, ε_t ~ N(0, σ²)
+MODEL:
+    X ∼ Pois(rate)
+    Y₀ ∼ N(initial_mean, initial_std²)
+    For t = 1,…,T:
+        Y_t = α · Y_{t−1} + β · X + trend · t + ε_t,
+        ε_t ∼ N(0, noise_std²)
 
-COVARIATE SHIFT: Modifies distribution of Y_{0...T-1} while preserving 
-                 P(Y_T | Y_{0...T-1}) by regenerating Y_T with same AR(1) model
+COVARIATE SHIFT:
+    Re-draw X under a new Poisson rate, then re-generate {Y_t} from Y₀ with
+    the same recurrence to preserve P(Y_T ∣ Y_{0:T−1}) under the shifted covariate.
 
 KEY FEATURES:
-- Univariate AR(1) time series generation
-- Extensive 6-panel visualization showing covariate shift effects
-- Statistical summaries and model verification
-- Multiple shift types: mean_shift, scale_shift, selection_bias, time_varying
-- Likelihood ratio computation with visualization
-- Terminal output with detailed analysis
+- Univariate AR(1) + time-invariant covariate generation
+- Six-panel visualization of original vs. shifted series
+- Summary statistics and regression checks
+- Likelihood‐ratio weighting based on shift
+- Flexible command‐line interface
 
-DEFAULT VALUES:
-- T=30 (time series length), d=1 (univariate), n_train=100, n_test=50
-- ar_coef=0.7, noise_std=0.2, shift_amount=2.0, shift_time=0
+DEFAULTS:
+- T=30, n_train=100, n_test=50
+- α=0.7, β=1.0, noise_std=0.2, trend=0.0
+- covar_rate_original=1.0, covar_rate_shift=3.0
 - seed=42, save_plot=False
 
 USAGE:
-  python ts_generator.py                           # Basic visualization (shift at t=0)
-  python ts_generator.py --save_plot               # Save plots to file
-  python ts_generator.py --shift_time 15 --T 30   # Mid-series shift at t=15
-  python ts_generator.py --shift_amount 3.0 --T 50 # Larger shift, longer series
+  python ts_generator.py                           # basic run
+  python ts_generator.py --covar_rate_shift 5.0    # larger Poisson shift
 
-OUTPUT: Comprehensive plots showing original vs shifted time series, 
-        distributions, and preserved conditional relationships
+OUTPUT:
+  Plots and console summaries comparing original vs. shifted covariate effects.
 =============================================================================
 """
 
@@ -55,143 +59,112 @@ class TimeSeriesGenerator:
         if seed is not None:
             np.random.seed(seed)
     
-    def generate_ar_process(self, 
-                           n: int,
-                           ar_coef: float = 0.7,
-                           noise_std: float = 0.1,
-                           initial_mean: float = 0.0,
-                           initial_std: float = 1.0,
-                           trend_coef: float = 0.0) -> np.ndarray:
-        """Generate AR(1) time series with optional trend."""
+    def generate_with_poisson_covariate(
+        self,
+        n: int,
+        ar_coef: float = 0.7,
+        beta: float = 1.0,
+        covar_rate: float = 1.0,
+        noise_std: float = 0.1,
+        initial_mean: float = 0.0,
+        initial_std: float = 1.0,
+        trend_coef: float = 0.0
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Generate n realizations of:
+          X ~ Pois(covar_rate)
+          Y₀ ~ N(initial_mean, initial_std²)
+          Y_t = ar_coef·Y_{t-1} + beta·X + trend_coef·t + ε_t
+
+        Returns:
+            data: shape (n, T+1, d)
+            X:    shape (n,)
+        """
+        # draw time‐invariant covariate
+        X = np.random.poisson(lam=covar_rate, size=(n,))
+
+        # allocate series: (n, T+1, d)
         data = np.zeros((n, self.T + 1, self.d))
-        
-        # Generate initial conditions Y_0
+
+        # initial Y₀
         data[:, 0, :] = np.random.normal(initial_mean, initial_std, (n, self.d))
-        
-        # Generate the rest of the time series
+
+        # build forward
         for t in range(1, self.T + 1):
             noise = np.random.normal(0, noise_std, (n, self.d))
             trend = trend_coef * t
-            data[:, t, :] = ar_coef * data[:, t-1, :] + trend + noise
-            
-        return data
-    
-    def introduce_covariate_shift(self,
-                                data: np.ndarray,
-                                conditional_model: str = 'ar1',
-                                model_params: dict = None,
-                                shift_type: str = 'mean_shift',
-                                shift_params: dict = None,
-                                shift_time: int = 0) -> Tuple[np.ndarray, np.ndarray]:
-        """
-        Introduce covariate shift by modifying covariates and regenerating targets.
-        
-        Args:
-            shift_time: When shift occurs (0 = from beginning, k = starts at time k)
-        """
-        if shift_params is None:
-            shift_params = {}
-        if model_params is None:
-            model_params = {'ar_coef': 0.7, 'noise_std': 0.1}
-            
-        n, T_plus_1, d = data.shape
-        shifted_data = data.copy()
-        
-        # Determine which time points to shift
-        if shift_time == 0:
-            time_mask = slice(None, -1)  # Y_0 to Y_{T-1}
-        else:
-            if shift_time >= T_plus_1 - 1:
-                raise ValueError(f"shift_time ({shift_time}) must be < {T_plus_1 - 1}")
-            time_mask = slice(shift_time, -1)  # Y_{shift_time} to Y_{T-1}
-        
-        # Step 1: Apply covariate shift to selected time points
-        if shift_type == 'mean_shift':
-            shift_amount = shift_params.get('shift_amount', 1.0)
-            shifted_data[:, time_mask, :] += shift_amount
-            
-        elif shift_type == 'scale_shift':
-            scale_factor = shift_params.get('scale_factor', 1.5)
-            mean = np.mean(shifted_data[:, time_mask, :], axis=(0, 1), keepdims=True)
-            shifted_data[:, time_mask, :] = mean + scale_factor * (shifted_data[:, time_mask, :] - mean)
-            
-        elif shift_type == 'selection_bias':
-            threshold = shift_params.get('threshold', 0.0)
-            selection_prob = shift_params.get('selection_prob', 0.7)
-            
-            reference_time = shift_time if shift_time > 0 else 0
-            initial_values = shifted_data[:, reference_time, 0]
-            probs = np.where(initial_values > threshold, selection_prob, 1 - selection_prob)
-            
-            selected_indices = np.random.binomial(1, probs).astype(bool)
-            shifted_data = shifted_data[selected_indices]
-            n = shifted_data.shape[0]
-            
-        elif shift_type == 'time_varying':
-            shift_strength = shift_params.get('shift_strength', 0.1)
-            start_idx = shift_time
-            end_idx = T_plus_1 - 1
-            for t in range(start_idx, end_idx):
-                time_factor = (t - start_idx) / max(end_idx - start_idx - 1, 1)
-                shift = shift_strength * time_factor * np.sin(2 * np.pi * time_factor)
-                shifted_data[:, t, :] += shift
+            # incorporate X (reshape to broadcast over the last dim)
+            data[:, t, :] = (
+                ar_coef * data[:, t-1, :]
+                + beta * X.reshape(n, 1)
+                + trend
+                + noise
+            )
 
-        elif shift_type == 'outlier_injection':
-            # randomly inject large outliers into a fraction of covariates
-            frac = shift_params.get('outlier_frac', 0.05)
-            magnitude = shift_params.get('outlier_mag', 5.0)
-            mask = np.random.rand(n, *(1,)* (d+1)) < frac
-            noise = np.random.choice([-1,1], size=mask.shape) * magnitude
-            shifted_data[:, time_mask, :][mask[:, time_mask, :]] += noise[mask]
-        
-        elif shift_type == 'trend_change':
-            # add a linear trend after shift_time
-            new_trend = shift_params.get('new_trend_coef', 0.5)
-            for t in range(shift_time, T_plus_1 - 1):
-                shifted_data[:, t, :] += new_trend * (t - shift_time)
-        
-        elif shift_type == 'noise_increase':
-            # increase noise std after shift
-            factor = shift_params.get('noise_factor', 5.0)
-            base_noise = np.random.normal(0, model_params.get('noise_std',0.1)*factor, (n,d))
-            shifted_data[:, time_mask, :] += base_noise[:,None,:] if d>1 else base_noise[:,None]
-        
-        elif shift_type == 'seasonal_shift':
-            # add seasonal (sinusoidal) component
-            period = shift_params.get('season_period', 12)
-            amp = shift_params.get('season_amp', 1.0)
-            times = np.arange(time_mask.start or 0, time_mask.stop)
-            seasonal = amp * np.sin(2*np.pi*(times - (shift_time or 0)) / period)
-            shifted_data[:, time_mask, 0] += seasonal
-        
-        # Step 2: Regenerate time points after the shift using the same conditional model
-        if shift_time == 0:
-            regen_start = 1
-        else:
-            regen_start = shift_time + 1
-            
-        for t in range(regen_start, T_plus_1 - 1):
-            if conditional_model == 'ar1':
-                ar_coef = model_params.get('ar_coef', 0.7)
-                noise_std = model_params.get('noise_std', 0.1)
-                trend_coef = model_params.get('trend_coef', 0.0)
-                
-                noise = np.random.normal(0, noise_std, (n, d))
-                trend = trend_coef * t
-                shifted_data[:, t, :] = ar_coef * shifted_data[:, t-1, :] + trend + noise
-                
-        # Finally, regenerate the target Y_T
-        t = T_plus_1 - 1
-        if conditional_model == 'ar1':
-            ar_coef = model_params.get('ar_coef', 0.7)
-            noise_std = model_params.get('noise_std', 0.1)
-            trend_coef = model_params.get('trend_coef', 0.0)
-            
-            noise = np.random.normal(0, noise_std, (n, d))
-            trend = trend_coef * t
-            shifted_data[:, -1, :] = ar_coef * shifted_data[:, -2, :] + trend + noise
-        
-        return data, shifted_data
+        return data, X
+
+
+    def introduce_poisson_shift(
+        self,
+        original_data: np.ndarray,
+        original_X: np.ndarray,
+        shift_rate: float = 3.0,
+        model_params: dict = None
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Introduce a covariate shift by re-drawing the time-invariant Poisson covariate
+        at a new rate, and re-generating each series from the same initial Y₀.
+
+        Args:
+            original_data: array of shape (n, T+1, d) containing the original series.
+            original_X:    array of shape (n,) containing the original covariate X ~ Pois(rate_orig).
+            shift_rate:    new Poisson rate to draw X_shifted ~ Pois(shift_rate).
+            model_params:  dict with keys:
+                'ar_coef'    (float, default 0.7),
+                'beta'       (float, default 1.0),
+                'noise_std'  (float, default 0.1),
+                'trend_coef' (float, default 0.0).
+
+        Returns:
+            shifted_data: array of shape (n, T+1, d) regenerated under the new X.
+            shifted_X:    array of shape (n,) of new Poisson covariates.
+        """
+        if model_params is None:
+            model_params = {
+                'ar_coef':    0.7,
+                'beta':       1.0,
+                'noise_std':  0.1,
+                'trend_coef': 0.0
+            }
+
+        n, T_plus_1, d = original_data.shape
+
+        # Step 1: redraw X under the new Poisson rate
+        shifted_X = np.random.poisson(lam=shift_rate, size=(n,))
+
+        # Step 2: allocate and seed the shifted series with the same initial Y₀
+        shifted_data = np.zeros_like(original_data)
+        shifted_data[:, 0, :] = original_data[:, 0, :]
+
+        # Step 3: regenerate forward using the AR(1) + covariate model
+        for t in range(1, T_plus_1):
+            noise = np.random.normal(
+                loc=0,
+                scale=model_params['noise_std'],
+                size=(n, d)
+            )
+            trend = model_params['trend_coef'] * t
+            # incorporate X (broadcast to d dimensions)
+            X_term = model_params['beta'] * shifted_X.reshape(n, 1)
+            shifted_data[:, t, :] = (
+                model_params['ar_coef'] * shifted_data[:, t-1, :]
+                + X_term
+                + trend
+                + noise
+            )
+
+        return shifted_data, shifted_X
+
     
     def compute_likelihood_ratios(self,
                                 original_data: np.ndarray,
@@ -213,290 +186,232 @@ class TimeSeriesGenerator:
             
         return likelihood_ratios
     
-    def visualize_covariate_shift(self, original_data: np.ndarray, shifted_data: np.ndarray, 
-                                shift_time: int = 0, save_plot: bool = False, 
-                                filename: str = "covariate_shift.png"):
-        """Create comprehensive visualization of the covariate shift with timing illustration."""
+    def visualize_covariate_shift(
+        self,
+        original_data: np.ndarray,
+        shifted_data: np.ndarray,
+        original_X: np.ndarray,
+        shifted_X: np.ndarray,
+        save_plot: bool = False,
+        filename: str = "covariate_shift.png"
+    ):
+        """
+        Create comprehensive visualization of the covariate shift.
+        """
         fig = plt.figure(figsize=(18, 12))
-        
-        # Plot 1: Sample time series from original data
+
+        # 1) Sample original time series
         plt.subplot(2, 3, 1)
         n_plot = min(10, original_data.shape[0])
         for i in range(n_plot):
             plt.plot(original_data[i, :, 0], alpha=0.6, color='blue', linewidth=1)
-        plt.title('Original Time Series (Training Data)', fontsize=12, fontweight='bold')
-        plt.xlabel('Time')
-        plt.ylabel('Value')
+        plt.title('Original Time Series', fontsize=12, fontweight='bold')
+        plt.xlabel('Time'); plt.ylabel('Value')
         plt.grid(True, alpha=0.3)
-        
-        # Plot 2: Sample time series from shifted data with shift timing highlighted
+
+        # 2) Sample shifted time series
         plt.subplot(2, 3, 2)
         n_plot = min(10, shifted_data.shape[0])
         T = shifted_data.shape[1]
-        
         for i in range(n_plot):
-            # Plot pre-shift period in blue (if any)
-            if shift_time > 0:
-                plt.plot(range(shift_time), shifted_data[i, :shift_time, 0], 
-                        alpha=0.6, color='blue', linewidth=1.5)
-            
-            # Plot post-shift period in red
-            plt.plot(range(shift_time, T), shifted_data[i, shift_time:, 0], 
-                    alpha=0.6, color='red', linewidth=1.5)
-            
-        # Add vertical line to show shift timing
-        if shift_time > 0:
-            plt.axvline(x=shift_time, color='black', linestyle='--', linewidth=2, 
-                       label=f'Shift at t={shift_time}')
-            plt.legend()
-            
-        plt.title('Shifted Time Series (Test Data)', fontsize=12, fontweight='bold')
-        plt.xlabel('Time')
-        plt.ylabel('Value')
+            plt.plot(range(T), shifted_data[i, :, 0], alpha=0.6, color='red', linewidth=1)
+        plt.title('Shifted Time Series', fontsize=12, fontweight='bold')
+        plt.xlabel('Time'); plt.ylabel('Value')
         plt.grid(True, alpha=0.3)
-        
-        # Plot 3: Overlay comparison with shift timing
+
+        # 3) Overlay comparison
         plt.subplot(2, 3, 3)
         for i in range(min(5, original_data.shape[0])):
-            plt.plot(original_data[i, :, 0], alpha=0.7, color='blue', linewidth=1.5, 
+            plt.plot(original_data[i, :, 0],
+                    alpha=0.7,
+                    color='blue',
+                    linewidth=1.5,
                     label='Original' if i == 0 else '')
-        
         for i in range(min(5, shifted_data.shape[0])):
-            # Pre-shift in blue, post-shift in red
-            if shift_time > 0:
-                plt.plot(range(shift_time), shifted_data[i, :shift_time, 0], 
-                        alpha=0.7, color='blue', linewidth=1.5)
-            plt.plot(range(shift_time, T), shifted_data[i, shift_time:, 0], 
-                    alpha=0.7, color='red', linewidth=1.5,
+            plt.plot(range(T),
+                    shifted_data[i, :, 0],
+                    alpha=0.7,
+                    color='red',
+                    linewidth=1.5,
                     label='Shifted' if i == 0 else '')
-        
-        # Highlight shift timing
-        if shift_time > 0:
-            plt.axvline(x=shift_time, color='black', linestyle='--', linewidth=2, alpha=0.8)
-            plt.fill_between([shift_time, T-1], plt.ylim()[0], plt.ylim()[1], 
-                           alpha=0.1, color='red', label='Shift Period')
-        
-        plt.title(f'Overlay Comparison (Shift at t={shift_time})', fontsize=12, fontweight='bold')
-        plt.xlabel('Time')
-        plt.ylabel('Value')
-        plt.legend()
-        plt.grid(True, alpha=0.3)
-        
-        # Plot 4: Distribution of initial values (Y_0) or shift-time values
+        plt.title('Overlay Comparison', fontsize=12, fontweight='bold')
+        plt.xlabel('Time'); plt.ylabel('Value')
+        plt.legend(); plt.grid(True, alpha=0.3)
+
+        # 4) Distribution of covariate X
         plt.subplot(2, 3, 4)
-        reference_time = max(0, shift_time)
-        original_ref = original_data[:, reference_time, 0]
-        shifted_ref = shifted_data[:, reference_time, 0]
-        
-        plt.hist(original_ref, bins=20, alpha=0.7, label=f'Original Y_{reference_time}', 
-                color='blue', density=True)
-        plt.hist(shifted_ref, bins=20, alpha=0.7, label=f'Shifted Y_{reference_time}', 
-                color='red', density=True)
-        plt.title(f'Distribution at Shift Time (t={reference_time})', fontsize=12, fontweight='bold')
-        plt.xlabel(f'Y_{reference_time} Value')
-        plt.ylabel('Density')
-        plt.legend()
-        plt.grid(True, alpha=0.3)
-        
-        # Plot 5: Distribution of final values (Y_T)
+        bins = 20
+        plt.hist(shifted_X,
+                bins=bins,
+                density=True,
+                alpha=0.7,
+                color='red',
+                label='Shifted X')
+        plt.hist(original_X,
+                bins=bins,
+                density=True,
+                alpha=0.7,
+                color='blue',
+                label='Original X')
+        plt.title('Distribution of Covariate X', fontsize=12, fontweight='bold')
+        plt.xlabel('X value'); plt.ylabel('Density')
+        plt.legend(); plt.grid(True, alpha=0.3)
+
+        # 5) Distribution of final Yₜ
         plt.subplot(2, 3, 5)
-        original_final = original_data[:, -1, 0]
-        shifted_final = shifted_data[:, -1, 0]
-        
-        plt.hist(original_final, bins=20, alpha=0.7, label='Original Y_T', 
-                color='blue', density=True)
-        plt.hist(shifted_final, bins=20, alpha=0.7, label='Shifted Y_T', 
-                color='red', density=True)
-        plt.title('Distribution of Final Values', fontsize=12, fontweight='bold')
-        plt.xlabel('Y_T Value')
-        plt.ylabel('Density')
-        plt.legend()
-        plt.grid(True, alpha=0.3)
-        
-        # Plot 6: Scatter plot Y_{T-1} vs Y_T to show conditional relationship
-        plt.subplot(2, 3, 6)
-        original_prev = original_data[:, -2, 0]
-        original_final = original_data[:, -1, 0]
-        shifted_prev = shifted_data[:, -2, 0]
-        shifted_final = shifted_data[:, -1, 0]
-        
-        plt.scatter(original_prev, original_final, alpha=0.6, color='blue', 
-                   label='Original', s=30)
-        plt.scatter(shifted_prev, shifted_final, alpha=0.6, color='red', 
-                   label='Shifted', s=30)
-        
-        # Add regression lines to show preserved conditional relationship
-        from scipy.stats import linregress
-        slope_orig, intercept_orig, r_orig, _, _ = linregress(original_prev, original_final)
-        slope_shift, intercept_shift, r_shift, _, _ = linregress(shifted_prev, shifted_final)
-        
-        x_range = np.linspace(min(np.min(original_prev), np.min(shifted_prev)),
-                             max(np.max(original_prev), np.max(shifted_prev)), 100)
-        plt.plot(x_range, slope_orig * x_range + intercept_orig, 'b--', 
-                label=f'Original slope: {slope_orig:.3f}')
-        plt.plot(x_range, slope_shift * x_range + intercept_shift, 'r--', 
-                label=f'Shifted slope: {slope_shift:.3f}')
-        
-        plt.title('Conditional Relationship: Y_{T-1} vs Y_T', fontsize=12, fontweight='bold')
-        plt.xlabel('Y_{T-1}')
-        plt.ylabel('Y_T')
-        plt.legend()
-        plt.grid(True, alpha=0.3)
-        
+        orig_final = original_data[:, -1, 0]
+        shf_final = shifted_data[:, -1, 0]
+        plt.hist(orig_final,
+                bins=bins,
+                density=True,
+                alpha=0.7,
+                color='blue',
+                label='Original Y_T')
+        plt.hist(shf_final,
+                bins=bins,
+                density=True,
+                alpha=0.7,
+                color='red',
+                label='Shifted Y_T')
+        plt.title('Distribution of Final Y Values', fontsize=12, fontweight='bold')
+        plt.xlabel('Y_T'); plt.ylabel('Density')
+        plt.legend(); plt.grid(True, alpha=0.3)
+
+        # (Plot 6 intentionally omitted)
+
         plt.tight_layout()
-        
         if save_plot:
             plt.savefig(filename, dpi=300, bbox_inches='tight')
             print(f"Plot saved as {filename}")
-        
         plt.show()
     
-    def print_statistics(self, original_data: np.ndarray, shifted_data: np.ndarray, shift_time: int = 0):
-        """Print summary statistics to understand the shift."""
+    def print_statistics(
+        self,
+        original_data: np.ndarray,
+        shifted_data: np.ndarray,
+        original_X: np.ndarray,
+        shifted_X: np.ndarray
+    ):
+        """Print summary statistics for both Y and the Poisson covariate X."""
         print("\n" + "="*70)
         print("COVARIATE SHIFT ANALYSIS")
         print("="*70)
-        
-        # Original data statistics
+
+        # Covariate X statistics
+        print(f"\nCovariate X (original): mean={np.mean(original_X):.3f}, std={np.std(original_X):.3f}")
+        print(f"Covariate X (shifted) : mean={np.mean(shifted_X):.3f}, std={np.std(shifted_X):.3f}")
+
+        # Y series statistics
         orig_initial = original_data[:, 0, 0]
         orig_final = original_data[:, -1, 0]
-        
-        # Shifted data statistics  
         shift_initial = shifted_data[:, 0, 0]
         shift_final = shifted_data[:, -1, 0]
-        
-        print(f"\nShift Timing: t = {shift_time}")
-        if shift_time == 0:
-            print("  → Entire covariate history Y₀...T₋₁ is shifted")
-        else:
-            print(f"  → Time points Y₀...Y_{shift_time-1} unchanged")
-            print(f"  → Time points Y_{shift_time}...T₋₁ shifted")
-        
-        print(f"\nOriginal Data (n={original_data.shape[0]}):")
-        print(f"  Y₀ - Mean: {np.mean(orig_initial):.3f}, Std: {np.std(orig_initial):.3f}")
-        print(f"  Y_T - Mean: {np.mean(orig_final):.3f}, Std: {np.std(orig_final):.3f}")
-        
-        print(f"\nShifted Data (n={shifted_data.shape[0]}):")
-        print(f"  Y₀ - Mean: {np.mean(shift_initial):.3f}, Std: {np.std(shift_initial):.3f}")
-        print(f"  Y_T - Mean: {np.mean(shift_final):.3f}, Std: {np.std(shift_final):.3f}")
-        
-        # Compare at shift time
-        reference_time = max(0, shift_time)
-        orig_ref = original_data[:, reference_time, 0]
-        shift_ref = shifted_data[:, reference_time, 0]
-        
-        print(f"\nShift in Covariates at t={reference_time}:")
-        print(f"  Mean difference: {np.mean(shift_ref) - np.mean(orig_ref):.3f}")
-        print(f"  Std ratio: {np.std(shift_ref) / (np.std(orig_ref) + 1e-10):.3f}")
-        
-        # Check if conditional relationship is preserved
-        from scipy.stats import linregress
-        orig_slope, _, orig_r2, _, _ = linregress(original_data[:, -2, 0], original_data[:, -1, 0])
-        shift_slope, _, shift_r2, _, _ = linregress(shifted_data[:, -2, 0], shifted_data[:, -1, 0])
-        
-        print(f"\nConditional Relationship P(Y_T | Y_{{T-1}}):")
-        print(f"  Original slope: {orig_slope:.3f} (R²: {orig_r2:.3f})")
-        print(f"  Shifted slope: {shift_slope:.3f} (R²: {shift_r2:.3f})")
-        print(f"  Slope preservation: {'✓' if abs(orig_slope - shift_slope) < 0.1 else '✗'}")
-        
-        if shift_time > 0:
-            print(f"\nTiming Analysis:")
-            # Check pre-shift period correlation
-            if shift_time > 1:
-                pre_orig = original_data[:, :shift_time, 0].mean(axis=1)
-                pre_shift = shifted_data[:, :shift_time, 0].mean(axis=1)
-                pre_corr = np.corrcoef(pre_orig, pre_shift)[0, 1]
-                print(f"  Pre-shift correlation: {pre_corr:.3f} (should be ~1.0)")
-            
-            # Check post-shift period difference
-            post_orig = original_data[:, shift_time:, 0].mean(axis=1)
-            post_shift = shifted_data[:, shift_time:, 0].mean(axis=1)
-            post_diff = np.mean(post_shift - post_orig)
-            print(f"  Post-shift mean difference: {post_diff:.3f}")
 
+        print(f"\nOriginal Y (n={original_data.shape[0]})")
+        print(f"  Y₀: mean={np.mean(orig_initial):.3f}, std={np.std(orig_initial):.3f}")
+        print(f"  Y_T: mean={np.mean(orig_final):.3f}, std={np.std(orig_final):.3f}")
+
+        print(f"\nShifted Y (n={shifted_data.shape[0]})")
+        print(f"  Y₀: mean={np.mean(shift_initial):.3f}, std={np.std(shift_initial):.3f}")
+        print(f"  Y_T: mean={np.mean(shift_final):.3f}, std={np.std(shift_final):.3f}")
 
 def main():
-    """Main function to run the time series generation and visualization."""
-    parser = argparse.ArgumentParser(description='Generate time series with covariate shift')
-    parser.add_argument('--n_train', type=int, default=100, help='Number of training series')
-    parser.add_argument('--n_test', type=int, default=50, help='Number of test series') 
-    parser.add_argument('--T', type=int, default=30, help='Length of time series')
-    parser.add_argument('--shift_amount', type=float, default=2.0, help='Amount of mean shift')
-    parser.add_argument('--ar_coef', type=float, default=0.7, help='AR coefficient')
-    parser.add_argument('--noise_std', type=float, default=0.2, help='Noise standard deviation')
-    parser.add_argument('--seed', type=int, default=42, help='Random seed')
-    parser.add_argument('--shift_time', type=int, default=0, help='When covariate shift occurs (0=from start)')
-    parser.add_argument('--save_plot', action='store_true', help='Save plot to file')
-    
+    import argparse
+    parser = argparse.ArgumentParser(
+        description='Generate AR(1) series with Poisson covariate shift'
+    )
+    parser.add_argument('--n_train', type=int, default=100,
+                        help='Number of training series')
+    parser.add_argument('--n_test', type=int, default=50,
+                        help='Number of test series')
+    parser.add_argument('--T', type=int, default=30,
+                        help='Length of each series (T + 1 points)')
+    parser.add_argument('--ar_coef', type=float, default=0.7,
+                        help='AR(1) coefficient α')
+    parser.add_argument('--beta', type=float, default=1.0,
+                        help='Covariate coefficient β')
+    parser.add_argument('--noise_std', type=float, default=0.2,
+                        help='Noise standard deviation')
+    parser.add_argument('--trend_coef', type=float, default=0.0,
+                        help='Linear trend coefficient')
+    parser.add_argument('--covar_rate', type=float, default=1.0,
+                        help='Original Poisson rate for X')
+    parser.add_argument('--covar_rate_shift', type=float, default=3.0,
+                        help='Shifted Poisson rate for X')
+    parser.add_argument('--seed', type=int, default=42,
+                        help='Random seed')
+    parser.add_argument('--save_plot', action='store_true',
+                        help='Save the visualization to file')
+
     args = parser.parse_args()
-    
-    print("Time Series Generator with Covariate Shift")
+
+    print("Time Series Generator w/ Poisson Covariate Shift")
     print("="*50)
-    print(f"Parameters:")
-    print(f"  Training series: {args.n_train}")
-    print(f"  Test series: {args.n_test}")
-    print(f"  Time series length: {args.T + 1}")
-    print(f"  AR coefficient: {args.ar_coef}")
-    print(f"  Noise std: {args.noise_std}")
-    print(f"  Shift amount: {args.shift_amount}")
-    print(f"  Shift time: {args.shift_time}")
-    print(f"  Random seed: {args.seed}")
-    
-    # Initialize generator
+    print(f"Training series: {args.n_train}")
+    print(f"Test series    : {args.n_test}")
+    print(f"Series length  : {args.T + 1}")
+    print(f"AR coef (α)    : {args.ar_coef}")
+    print(f"Beta (β)       : {args.beta}")
+    print(f"Noise std      : {args.noise_std}")
+    print(f"Trend coef     : {args.trend_coef}")
+    print(f"X rate         : {args.covar_rate} → {args.covar_rate_shift}")
+    print(f"Seed           : {args.seed}")
+
+    # set up
     generator = TimeSeriesGenerator(T=args.T, d=1, seed=args.seed)
-    
-    # Generate original training data
-    print(f"\nGenerating {args.n_train} training time series...")
-    train_data = generator.generate_ar_process(
+
+    # generate original
+    train_data, train_X = generator.generate_with_poisson_covariate(
         n=args.n_train,
         ar_coef=args.ar_coef,
+        beta=args.beta,
+        covar_rate=args.covar_rate,
         noise_std=args.noise_std,
         initial_mean=0.0,
         initial_std=1.0,
-        trend_coef=0.0
+        trend_coef=args.trend_coef
     )
-    
-    print(f"Generated {args.n_train} training time series of length {generator.T+1}")
-    print(f"Data shape: {train_data.shape}")
-    
-    # Create test data with covariate shift
-    print(f"Applying covariate shift to {args.n_test} test series...")
-    original_test, shifted_test = generator.introduce_covariate_shift(
-        train_data[:args.n_test],
-        conditional_model='ar1',
+    print(f"\nGenerated {args.n_train} series, shape={train_data.shape}")
+
+    # select test
+    test_data = train_data[:args.n_test]
+    test_X    = train_X[:args.n_test]
+
+    # apply shift
+    shifted_data, shifted_X = generator.introduce_poisson_shift(
+        test_data,
+        test_X,
+        shift_rate=args.covar_rate_shift,
         model_params={
-            'ar_coef': args.ar_coef, 
-            'noise_std': args.noise_std, 
-            'trend_coef': 0.0
-        },
-        shift_type='mean_shift',
-        shift_params={'shift_amount': args.shift_amount},
-        shift_time=args.shift_time
+            'ar_coef':    args.ar_coef,
+            'beta':       args.beta,
+            'noise_std':  args.noise_std,
+            'trend_coef': args.trend_coef
+        }
     )
-    
-    # Compute likelihood ratios
-    likelihood_ratios = generator.compute_likelihood_ratios(train_data, shifted_test)
-    
-    # Print statistics
-    generator.print_statistics(original_test, shifted_test, shift_time=args.shift_time)
-    
-    print(f"\nLikelihood Ratios:")
-    print(f"  Mean: {np.mean(likelihood_ratios):.3f}")
-    print(f"  Std: {np.std(likelihood_ratios):.3f}")
-    print(f"  Min: {np.min(likelihood_ratios):.3f}")
-    print(f"  Max: {np.max(likelihood_ratios):.3f}")
-    
-    # Create visualization
-    print(f"\nGenerating visualization...")
+
+    # stats
+    generator.print_statistics(test_data,
+                                shifted_data,
+                                test_X,
+                                shifted_X)
+
+    # likelihood ratios remain Y-based
+    lr = generator.compute_likelihood_ratios(train_data, shifted_data)
+    print(f"\nLikelihood ratios (on Y₀): mean={np.mean(lr):.3f}, std={np.std(lr):.3f}")
+
+    # visualization
+    print("\nGenerating visualization...")
     generator.visualize_covariate_shift(
-        original_test, 
-        shifted_test, 
-        shift_time=args.shift_time,
+        test_data,
+        shifted_data,
+        test_X,
+        shifted_X,
         save_plot=args.save_plot,
-        filename="covariate_shift_visualization.png"
+        filename="covariate_shift.png"
     )
-    
-    print("\nAnalysis complete! Check the generated plots to see the covariate shift.")
+
+    print("\nDone.")
 
 if __name__ == "__main__":
     main()
