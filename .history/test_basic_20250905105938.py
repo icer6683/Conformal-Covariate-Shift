@@ -345,8 +345,7 @@ def plot_time_based_results(results_by_time, target_coverage, covariate_mode="st
     fig.suptitle(main_title, fontsize=14, fontweight='bold')
     
     # Plot 1: Coverage rate by time step
-    axes[0].plot(time_steps, coverage_rates, 'b-', linewidth=2)
-    axes[0].set_ylim(0.8, 1)
+    axes[0].plot(time_steps, coverage_rates, 'bo-', linewidth=2, markersize=6)
     axes[0].axhline(y=target_coverage, color='red', linestyle='--', linewidth=2,
                     label=f'Target ({target_coverage:.1%})')
     axes[0].set_xlabel('Time Step t')
@@ -356,7 +355,7 @@ def plot_time_based_results(results_by_time, target_coverage, covariate_mode="st
     axes[0].grid(True, alpha=0.3)
     
     # Plot 2: Interval width by time step  
-    axes[1].plot(time_steps, interval_widths, 'g-', linewidth=2, markersize=6)
+    axes[1].plot(time_steps, interval_widths, 'go-', linewidth=2, markersize=6)
     axes[1].set_xlabel('Time Step t')
     axes[1].set_ylabel('Average Interval Width')
     axes[1].set_title('Prediction Interval Width vs. Time Step')

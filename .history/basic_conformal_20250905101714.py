@@ -119,7 +119,9 @@ class BasicConformalPredictor:
         conformity_scores = np.array(conformity_scores)
         
         # Compute quantile for prediction intervals
-        self.quantile = np.quantile(conformity_scores, 1 - self.alpha, method='higher')
+        n_cal = len(conformity_scores)
+        q_level = np.ceil((n_cal + 1) * (1 - self.alpha)) / n_cal
+        self.quantile = np.quantile(conformity_scores, q_level, interpolation='higher')
         
         print(f"Calibration completed:")
         print(f"  Conformity scores - Mean: {np.mean(conformity_scores):.4f}, Std: {np.std(conformity_scores):.4f}")

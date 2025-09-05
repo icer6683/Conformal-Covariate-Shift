@@ -346,7 +346,6 @@ def plot_time_based_results(results_by_time, target_coverage, covariate_mode="st
     
     # Plot 1: Coverage rate by time step
     axes[0].plot(time_steps, coverage_rates, 'b-', linewidth=2)
-    axes[0].set_ylim(0.8, 1)
     axes[0].axhline(y=target_coverage, color='red', linestyle='--', linewidth=2,
                     label=f'Target ({target_coverage:.1%})')
     axes[0].set_xlabel('Time Step t')

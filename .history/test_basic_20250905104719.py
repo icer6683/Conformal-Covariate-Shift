@@ -250,12 +250,12 @@ def run_time_based_coverage_experiment(
 
     # Convert to numpy array
     test_data = np.array(test_series_list)  # Shape: (n_series, T+1, 1)
-    
+
     # ALWAYS USE THE FIRST TEST SERIES
     example_idx = 0  # Always use the first series
     example_series = test_data[example_idx].copy()  # Shape: (T+1, 1)
-    print(f"Storing first test series (index 0) for visualization")
-    
+    print(f"\nStoring first test series (index 0) for visualization")
+
     # -----------------------
     # TIME-BASED EVALUATION
     # -----------------------
@@ -265,16 +265,6 @@ def run_time_based_coverage_experiment(
     T = T_plus_1 - 1  # Number of prediction steps possible
     
     results_by_time = {}
-    
-    # Store the example series index and full data
-    results_by_time['example_idx'] = example_idx
-    results_by_time['example_full_series'] = example_series
-    
-    # INITIALIZE THE LISTS HERE - BEFORE THE LOOP
-    results_by_time['example_predictions'] = []
-    results_by_time['example_lower_bounds'] = []
-    results_by_time['example_upper_bounds'] = []
-    results_by_time['example_true_values'] = []
     
     # For each time step t, predict step t+1
     for t in range(T):  # t = 0, 1, 2, ..., T-1 (predicting t+1)
@@ -300,14 +290,14 @@ def run_time_based_coverage_experiment(
             
             predictions.append(pred)
             intervals.append([lower, upper])
-            
-            # STORE DATA FOR THE FIRST SERIES (i == 0)
+        
+        # STORE DATA FOR THE FIRST SERIES (i == 0)
             if i == example_idx:  # This will always be 0
                 results_by_time['example_predictions'].append(pred)
                 results_by_time['example_lower_bounds'].append(lower)
                 results_by_time['example_upper_bounds'].append(upper)
                 results_by_time['example_true_values'].append(true_value)
-        
+
         coverage_results = np.array(coverage_results)
         predictions = np.array(predictions)
         intervals = np.array(intervals)
@@ -329,6 +319,7 @@ def run_time_based_coverage_experiment(
     
     return results_by_time
 
+
 def plot_time_based_results(results_by_time, target_coverage, covariate_mode="static", with_shift=False):
     """Plot coverage results by time step."""
     fig, axes = plt.subplots(1, 3, figsize=(18, 5))
@@ -345,8 +336,7 @@ def plot_time_based_results(results_by_time, target_coverage, covariate_mode="st
     fig.suptitle(main_title, fontsize=14, fontweight='bold')
     
     # Plot 1: Coverage rate by time step
-    axes[0].plot(time_steps, coverage_rates, 'b-', linewidth=2)
-    axes[0].set_ylim(0.8, 1)
+    axes[0].plot(time_steps, coverage_rates, 'bo-', linewidth=2, markersize=6)
     axes[0].axhline(y=target_coverage, color='red', linestyle='--', linewidth=2,
                     label=f'Target ({target_coverage:.1%})')
     axes[0].set_xlabel('Time Step t')
@@ -356,7 +346,7 @@ def plot_time_based_results(results_by_time, target_coverage, covariate_mode="st
     axes[0].grid(True, alpha=0.3)
     
     # Plot 2: Interval width by time step  
-    axes[1].plot(time_steps, interval_widths, 'g-', linewidth=2, markersize=6)
+    axes[1].plot(time_steps, interval_widths, 'go-', linewidth=2, markersize=6)
     axes[1].set_xlabel('Time Step t')
     axes[1].set_ylabel('Average Interval Width')
     axes[1].set_title('Prediction Interval Width vs. Time Step')
@@ -457,7 +447,7 @@ def main():
     print(f"  With TEST shift  : {args.with_shift}")
     print(f"  Seed             : {args.seed}")
 
-        # Initialize generator and predictor
+    # Initialize generator and predictor
     generator = TimeSeriesGenerator(T=args.T, d=1, seed=args.seed)
     predictor = BasicConformalPredictor(alpha=args.alpha)
 
@@ -486,15 +476,10 @@ def main():
         n_cal=args.n_cal,
     )
 
-    # Compute overall statistics (AFTER results_by_time is defined)
+    # Compute overall statistics
     all_coverage = []
     all_widths = []
-    for key, value in results_by_time.items():
-        # Skip non-integer keys (metadata keys)
-        if not isinstance(key, int):
-            continue
-        
-        time_results = value
+    for time_results in results_by_time.values():
         all_coverage.extend(time_results['coverage_history'])
         all_widths.extend([time_results['interval_width']] * time_results['n_predictions'])
     
@@ -512,9 +497,7 @@ def main():
 
     print(f"\nCOVERAGE BY TIME STEP:")
     print("-" * 40)
-    # Filter to only get integer keys (time steps)
-    time_steps = sorted([k for k in results_by_time.keys() if isinstance(k, int)])
-    for time_step in time_steps:
+    for time_step in sorted(results_by_time.keys()):
         time_results = results_by_time[time_step]
         print(f"Time {time_step:2d}: {time_results['coverage_rate']:.1%} "
               f"(width: {time_results['interval_width']:.3f}, "
@@ -530,6 +513,7 @@ def main():
     )
 
     # Final assessment
+    time_steps = list(results_by_time.keys())
     coverage_rates = [results_by_time[t]['coverage_rate'] for t in time_steps]
     
     early_coverage = np.mean(coverage_rates[:len(coverage_rates)//3]) if coverage_rates else 0
