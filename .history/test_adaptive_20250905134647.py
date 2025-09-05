@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
 =============================================================================
-TEST BASIC CONFORMAL COVERAGE - TIME-BASED ANALYSIS
+TEST ADAPTIVE CONFORMAL COVERAGE - TIME-BASED ANALYSIS
 =============================================================================
 
 PURPOSE:
-  Generate data using ts_generator.py and test the *basic* conformal predictor
+  Generate data using ts_generator.py and test the *adaptive* conformal predictor
   (AR(1) on Y only, no shift correction), with TIME-BASED coverage visualization.
   Shows how coverage changes as prediction horizon increases (t=1,2,3,...,T).
   
@@ -20,27 +20,27 @@ WHAT THIS SHOWS:
 
 USAGE:
   # default (static X, no shift)
-  python test_basic.py
+  python test_adaptive.py
 
   # tighter α and more series
-  python test_basic.py --alpha 0.05 --n_series 1000
+  python test_adaptive.py --alpha 0.05 --n_series 1000
 
   # dynamic X with test-set covariate shift
-  python test_basic.py --covariate_mode dynamic --with_shift \
+  python test_adaptive.py --covariate_mode dynamic --with_shift \
       --x_rate 0.6 --x_rate_shift 0.9 --beta 1.0
 
 EXAMPLE USAGE:
 
-static + basic + no shift:
-    python test_basic.py --n_series 1000
-static + basic + with shift:
-    python test_basic.py --with_shift --n_series 1000
+static + adaptive + no shift:
+    python test_adaptive.py --n_series 1000
+static + adaptive + with shift:
+    python test_adaptive.py --with_shift --n_series 1000
 
-dynamic + basic + no shift:
-    python test_basic.py --n_series 1000 --covariate_mode dynamic
-dynamic + basic + with shift:
-    python test_basic.py --with_shift --n_series 1000 --covariate_mode dynamic
-
+dynamic + adaptive + no shift:
+    python test_adaptive.py --n_series 1000 --covariate_mode dynamic
+dynamic + adaptive + with shift:
+    python test_adaptive.py --with_shift --n_series 1000 --covariate_mode dynamic
+y = ax + b 
 =============================================================================
 """
 
@@ -48,12 +48,12 @@ import numpy as np
 import matplotlib.pyplot as plt
 import argparse
 from ts_generator import TimeSeriesGenerator
-from basic_conformal import BasicConformalPredictor
+from adaptive_conformal import OnlineConformalPredictor
 
 
 def run_time_based_coverage_experiment(
     generator: TimeSeriesGenerator,
-    predictor: BasicConformalPredictor,
+    predictor: OnlineConformalPredictor,
     *,
     n_series: int,
     covariate_mode: str,
@@ -292,7 +292,8 @@ def run_time_based_coverage_experiment(
             true_value = series[t+1, 0]   # Y_{t+1}
             
             # Get prediction and interval
-            pred, lower, upper = predictor.predict_with_interval(input_series)
+            pred, lower, upper = predictor.predict_with_interval(input_series, update_after=True, true_value=true_value,  # this is series[t+1, 0]
+                                                                 )
             
             # Check coverage
             covered = (lower <= true_value <= upper)
@@ -349,7 +350,7 @@ def plot_time_based_results(results_by_time, target_coverage, covariate_mode="st
     axes[0].set_ylim(0.8, 1)
     axes[0].axhline(y=target_coverage, color='red', linestyle='--', linewidth=2,
                     label=f'Target ({target_coverage:.1%})')
-    axes[0].set_xlabel('Time Step t')
+    axes[0].set_xlabel('Time step t')
     axes[0].set_ylabel('Coverage Rate')
     axes[0].set_title('Coverage Rate vs. Time Step')
     axes[0].legend()
@@ -357,7 +358,7 @@ def plot_time_based_results(results_by_time, target_coverage, covariate_mode="st
     
     # Plot 2: Interval width by time step  
     axes[1].plot(time_steps, interval_widths, 'g-', linewidth=2, markersize=6)
-    axes[1].set_xlabel('Time Step t')
+    axes[1].set_xlabel('Time step t')
     axes[1].set_ylabel('Average Interval Width')
     axes[1].set_title('Prediction Interval Width vs. Time Step')
     axes[1].grid(True, alpha=0.3)
@@ -380,7 +381,7 @@ def plot_time_based_results(results_by_time, target_coverage, covariate_mode="st
         axes[2].fill_between(plot_steps, lower_bounds, upper_bounds, 
                             alpha=0.2, color='blue')
         
-        axes[2].set_xlabel('Time Step t')
+        axes[2].set_xlabel('Time step t')
         axes[2].set_ylabel('Value')
         axes[2].set_title('First Test Series: Predictions and True Values')
         axes[2].legend(loc='best')
@@ -391,17 +392,17 @@ def plot_time_based_results(results_by_time, target_coverage, covariate_mode="st
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Test basic conformal prediction with time-based coverage analysis')
+    parser = argparse.ArgumentParser(description='Test adaptive conformal prediction with time-based coverage analysis')
     # Experiment sizes & basics
-    parser.add_argument('--n_series', type=int, default=600, help='Number of test series')
-    parser.add_argument('--n_train',  type=int, default=1200, help='Number of training series')
-    parser.add_argument('--n_cal',    type=int, default=200, help='Number of calibration series')
+    parser.add_argument('--n_series', type=int, default=300, help='Number of test series')
+    parser.add_argument('--n_train',  type=int, default=600, help='Number of training series')
+    parser.add_argument('--n_cal',    type=int, default=100, help='Number of calibration series')
     parser.add_argument('--alpha', type=float, default=0.1, help='Miscoverage level')
-    parser.add_argument('--T', type=int, default=200, help='Time series length (T+1 points)')
+    parser.add_argument('--T', type=int, default=10, help='Time series length (T+1 points)')
     parser.add_argument('--seed', type=int, default=100, help='Random seed')
 
     # Y model params
-    parser.add_argument('--ar_coef', type=float, default=0.7, help='AR(1) coefficient for Y')
+    parser.add_argument('--ar_coef', type=float, default=1.2, help='AR(1) coefficient for Y')
     parser.add_argument('--beta', type=float, default=1.0, help='Covariate effect β on Y')
     parser.add_argument('--noise_std', type=float, default=0.2, help='Std dev of Y noise')
     parser.add_argument('--trend_coef', type=float, default=0.0, help='Linear trend for Y')
@@ -414,7 +415,7 @@ def main():
 
     # Static-X params (generation + shift)
     parser.add_argument('--covar_rate', type=float, default=1.0, help='Poisson rate for X (static mode)')
-    parser.add_argument('--covar_rate_shift', type=float, default=3.0,
+    parser.add_argument('--covar_rate_shift', type=float, default=4.0,
                         help='Shifted Poisson rate for TEST X (static mode)')
 
     # Dynamic-X params (generation)
@@ -431,7 +432,7 @@ def main():
 
     args = parser.parse_args()
 
-    print("BASIC CONFORMAL PREDICTION - TIME-BASED COVERAGE ANALYSIS")
+    print("ADAPTIVE CONFORMAL PREDICTION - TIME-BASED COVERAGE ANALYSIS")
     print("="*65)
     print("Analyzing how coverage changes as prediction horizon increases...")
     print("Parameters:")
@@ -459,7 +460,7 @@ def main():
 
         # Initialize generator and predictor
     generator = TimeSeriesGenerator(T=args.T, d=1, seed=args.seed)
-    predictor = BasicConformalPredictor(alpha=args.alpha)
+    predictor = OnlineConformalPredictor(alpha=args.alpha, window_size=100)
 
     # Run time-based coverage experiment
     results_by_time = run_time_based_coverage_experiment(
@@ -510,15 +511,10 @@ def main():
     print(f"Coverage std        : {np.std(all_coverage):.3f}")
     print(f"Mean interval width : {np.mean(all_widths):.4f}")
 
-    print(f"\nCOVERAGE BY TIME STEP:")
-    print("-" * 40)
     # Filter to only get integer keys (time steps)
     time_steps = sorted([k for k in results_by_time.keys() if isinstance(k, int)])
     for time_step in time_steps:
         time_results = results_by_time[time_step]
-        print(f"Time {time_step:2d}: {time_results['coverage_rate']:.1%} "
-              f"(width: {time_results['interval_width']:.3f}, "
-              f"n={time_results['n_predictions']})")
 
     # Create time-based coverage plots
     print("\nCreating time-based coverage plots...")

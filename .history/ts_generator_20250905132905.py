@@ -138,7 +138,7 @@ class TimeSeriesGenerator:
     def generate_with_dynamic_covariate(
         self,
         n: int,
-        ar_coef: float = 1.0,       # α for Y
+        ar_coef: float = 0.7,       # α for Y
         beta: float = 1.0,          # β linking X_t to Y_{t+1}
         noise_std: float = 0.1,     # σ for Y noise ε_t
         initial_mean: float = 0.0,  # mean of Y_0
@@ -212,7 +212,7 @@ class TimeSeriesGenerator:
 
         if model_params is None:
             model_params = {
-                'ar_coef':    1.0,
+                'ar_coef':    0.7,
                 'beta':       1.0,
                 'noise_std':  0.1,
                 'trend_coef': 0.0
