@@ -1,13 +1,17 @@
 #!/usr/bin/env python3
 """
 =============================================================================
-TEST BASIC CONFORMAL COVERAGE - TIME-BASED ANALYSIS
+TEST CONFORMAL COVERAGE - TIME-BASED ANALYSIS (UNIFIED)
 =============================================================================
 
 PURPOSE:
-  Generate data using ts_generator.py and test the *basic* conformal predictor
-  (AR(1) on Y only, no shift correction), with TIME-BASED coverage visualization.
-  Shows how coverage changes as prediction horizon increases (t=1,2,3,...,T).
+  Generate data using ts_generator.py and test conformal predictors with 
+  TIME-BASED coverage visualization. Shows how coverage changes as prediction 
+  horizon increases (t=1,2,3,...,T).
+  
+  Supports two predictor modes:
+    - basic    : BasicConformalPredictor (AR(1) on Y only, no adaptation)
+    - adaptive : OnlineConformalPredictor (AR(1) on Y only, adapts over time)
   
   Supports two covariate modes:
     - static  : time-invariant X (Poisson)
@@ -15,31 +19,28 @@ PURPOSE:
 
 WHAT THIS SHOWS:
   Coverage rate and interval width as a function of prediction time step t.
-  Since the basic method ignores X (both static and dynamic), coverage will
-  typically degrade as β grows and/or under covariate shift.
+  Compares how basic vs adaptive methods handle covariate shift scenarios.
 
 USAGE:
-  # default (static X, no shift)
-  python test_basic.py
+  # Basic predictor with default settings
+  python test_conformal.py --predictor basic
 
-  # tighter α and more series
-  python test_basic.py --alpha 0.05 --n_series 1000
+  # Adaptive predictor with default settings  
+  python test_conformal.py --predictor adaptive
 
-  # dynamic X with test-set covariate shift
-  python test_basic.py --covariate_mode dynamic --with_shift \
-      --x_rate 0.6 --x_rate_shift 0.9 --beta 1.0
+  # Dynamic covariates with test-set shift using adaptive predictor
+  python test_conformal.py --predictor adaptive --covariate_mode dynamic \
+      --with_shift --x_rate 0.6 --x_rate_shift 0.9 --beta 1.0
 
 EXAMPLE USAGE:
 
-static + basic + no shift:
-    python test_basic.py --n_series 1000
-static + basic + with shift:
-    python test_basic.py --with_shift --n_series 1000
+Basic predictor examples:
+    python test_conformal.py --predictor basic --n_series 1000
+    python test_conformal.py --predictor basic --with_shift --n_series 1000
 
-dynamic + basic + no shift:
-    python test_basic.py --n_series 1000 --covariate_mode dynamic
-dynamic + basic + with shift:
-    python test_basic.py --with_shift --n_series 1000 --covariate_mode dynamic
+Adaptive predictor examples:
+    python test_conformal.py --predictor adaptive --n_series 300
+    python test_conformal.py --predictor adaptive --with_shift --n_series 300
 
 =============================================================================
 """
@@ -49,11 +50,13 @@ import matplotlib.pyplot as plt
 import argparse
 from ts_generator import TimeSeriesGenerator
 from basic_conformal import BasicConformalPredictor
+from adaptive_conformal import OnlineConformalPredictor
 
 
 def run_time_based_coverage_experiment(
     generator: TimeSeriesGenerator,
-    predictor: BasicConformalPredictor,
+    predictor,  # Can be either BasicConformalPredictor or OnlineConformalPredictor
+    predictor_type: str,  # 'basic' or 'adaptive'
     *,
     n_series: int,
     covariate_mode: str,
@@ -88,11 +91,13 @@ def run_time_based_coverage_experiment(
     """
     mode = covariate_mode.lower()
     assert mode in {"static", "dynamic"}, "covariate_mode must be 'static' or 'dynamic'"
+    assert predictor_type in {"basic", "adaptive"}, "predictor_type must be 'basic' or 'adaptive'"
 
     if with_shift:
         print(f"Running TIME-BASED coverage experiment with TEST covariate shift on {n_series} series...")
     else:
         print(f"Running TIME-BASED coverage experiment on {n_series} series (NO TEST SHIFT)...")
+    print(f"Predictor type: {predictor_type}")
     print(f"Covariate mode: {mode}")
 
     # -----------------------
@@ -291,8 +296,15 @@ def run_time_based_coverage_experiment(
             input_series = series[:t+1]  # Y_0, Y_1, ..., Y_t
             true_value = series[t+1, 0]   # Y_{t+1}
             
-            # Get prediction and interval
-            pred, lower, upper = predictor.predict_with_interval(input_series)
+            # Get prediction and interval - handle different predictor types
+            if predictor_type == "basic":
+                pred, lower, upper = predictor.predict_with_interval(input_series)
+            else:  # adaptive
+                pred, lower, upper = predictor.predict_with_interval(
+                    input_series, 
+                    update_after=True, 
+                    true_value=true_value
+                )
             
             # Check coverage
             covered = (lower <= true_value <= upper)
@@ -329,7 +341,9 @@ def run_time_based_coverage_experiment(
     
     return results_by_time
 
-def plot_time_based_results(results_by_time, target_coverage, covariate_mode="static", with_shift=False):
+
+def plot_time_based_results(results_by_time, target_coverage, predictor_type="basic", 
+                          covariate_mode="static", with_shift=False):
     """Plot coverage results by time step."""
     fig, axes = plt.subplots(1, 3, figsize=(18, 5))
     
@@ -339,9 +353,10 @@ def plot_time_based_results(results_by_time, target_coverage, covariate_mode="st
     interval_widths = [results_by_time[t]['interval_width'] for t in time_steps]
     
     # Build title
+    predictor_str = predictor_type.capitalize()
     mode_str = "Dynamic $X_t$" if str(covariate_mode).lower() == "dynamic" else "Static X"
     shift_str = "with Shift" if with_shift else "no Shift"
-    main_title = f"Time-Based Coverage Analysis — {mode_str}, {shift_str}"
+    main_title = f"Time-Based Coverage Analysis — {predictor_str}, {mode_str}, {shift_str}"
     fig.suptitle(main_title, fontsize=14, fontweight='bold')
     
     # Plot 1: Coverage rate by time step
@@ -391,14 +406,27 @@ def plot_time_based_results(results_by_time, target_coverage, covariate_mode="st
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Test basic conformal prediction with time-based coverage analysis')
+    parser = argparse.ArgumentParser(description='Test conformal prediction with time-based coverage analysis')
+    
+    # MAIN TOGGLE: Predictor type
+    parser.add_argument('--predictor', choices=['basic', 'adaptive'], default='basic',
+                        help='Choose predictor type: basic (fixed) or adaptive (online)')
+    
     # Experiment sizes & basics
-    parser.add_argument('--n_series', type=int, default=600, help='Number of test series')
-    parser.add_argument('--n_train',  type=int, default=1200, help='Number of training series')
-    parser.add_argument('--n_cal',    type=int, default=200, help='Number of calibration series')
+    parser.add_argument('--n_series', type=int, default=None, 
+                        help='Number of test series (default: 600 for basic, 300 for adaptive)')
+    parser.add_argument('--n_train', type=int, default=None,
+                        help='Number of training series (default: 1200 for basic, 600 for adaptive)')
+    parser.add_argument('--n_cal', type=int, default=None,
+                        help='Number of calibration series (default: 200 for basic, 100 for adaptive)')
     parser.add_argument('--alpha', type=float, default=0.1, help='Miscoverage level')
-    parser.add_argument('--T', type=int, default=200, help='Time series length (T+1 points)')
+    parser.add_argument('--T', type=int, default=None,
+                        help='Time series length (default: 200 for basic, 40 for adaptive)')
     parser.add_argument('--seed', type=int, default=100, help='Random seed')
+
+    # Adaptive-specific parameters
+    parser.add_argument('--window_size', type=int, default=100,
+                        help='Window size for adaptive predictor (only used with --predictor adaptive)')
 
     # Y model params
     parser.add_argument('--ar_coef', type=float, default=0.7, help='AR(1) coefficient for Y')
@@ -414,30 +442,56 @@ def main():
 
     # Static-X params (generation + shift)
     parser.add_argument('--covar_rate', type=float, default=1.0, help='Poisson rate for X (static mode)')
-    parser.add_argument('--covar_rate_shift', type=float, default=3.0,
-                        help='Shifted Poisson rate for TEST X (static mode)')
+    parser.add_argument('--covar_rate_shift', type=float, default=None,
+                        help='Shifted Poisson rate for TEST X (default: 3.0 for basic, 4.0 for adaptive)')
 
     # Dynamic-X params (generation)
-    parser.add_argument('--x_rate',      type=float, default=0.7, help='ρ_X for dynamic X_t')
-    parser.add_argument('--x_trend',     type=float, default=0.0, help='trend_X for dynamic X_t')
+    parser.add_argument('--x_rate', type=float, default=0.7, help='ρ_X for dynamic X_t')
+    parser.add_argument('--x_trend', type=float, default=0.0, help='trend_X for dynamic X_t')
     parser.add_argument('--x_noise_std', type=float, default=0.2, help='Std dev of η_t for X_t')
-    parser.add_argument('--x0_lambda',   type=float, default=1.0, help='Poisson rate for X₀ (dynamic)')
+    parser.add_argument('--x0_lambda', type=float, default=1.0, help='Poisson rate for X₀ (dynamic)')
 
     # Dynamic-X params (shift) — default to generation values if not provided
-    parser.add_argument('--x_rate_shift',      type=float, default=None, help='Shifted ρ_X for TEST X_t')
-    parser.add_argument('--x_trend_shift',     type=float, default=None, help='Shifted trend_X for TEST X_t')
+    parser.add_argument('--x_rate_shift', type=float, default=None, help='Shifted ρ_X for TEST X_t')
+    parser.add_argument('--x_trend_shift', type=float, default=None, help='Shifted trend_X for TEST X_t')
     parser.add_argument('--x_noise_std_shift', type=float, default=None, help='Shifted X noise std for TEST')
-    parser.add_argument('--x0_lambda_shift',   type=float, default=None, help='Shifted Poisson rate for X₀ (TEST)')
+    parser.add_argument('--x0_lambda_shift', type=float, default=None, help='Shifted Poisson rate for X₀ (TEST)')
 
     args = parser.parse_args()
 
-    print("BASIC CONFORMAL PREDICTION - TIME-BASED COVERAGE ANALYSIS")
+    # Set predictor-specific defaults
+    if args.predictor == "basic":
+        defaults = {
+            'n_series': 600,
+            'n_train': 1200,
+            'n_cal': 200,
+            'T': 200,
+            'covar_rate_shift': 3.0
+        }
+    else:  # adaptive
+        defaults = {
+            'n_series': 300,
+            'n_train': 600,
+            'n_cal': 100,
+            'T': 40,
+            'covar_rate_shift': 4.0
+        }
+
+    # Apply defaults where arguments weren't provided
+    for key, default_val in defaults.items():
+        if getattr(args, key) is None:
+            setattr(args, key, default_val)
+
+    print(f"{args.predictor.upper()} CONFORMAL PREDICTION - TIME-BASED COVERAGE ANALYSIS")
     print("="*65)
     print("Analyzing how coverage changes as prediction horizon increases...")
     print("Parameters:")
-    print(f"  Target coverage : {1-args.alpha:.1%} (α={args.alpha})")
+    print(f"  Predictor type   : {args.predictor}")
+    print(f"  Target coverage  : {1-args.alpha:.1%} (α={args.alpha})")
     print(f"  Series (train/cal/test): {args.n_train}/{args.n_cal}/{args.n_series}")
     print(f"  Series length    : {args.T + 1}")
+    if args.predictor == "adaptive":
+        print(f"  Window size      : {args.window_size}")
     print(f"  AR coef (Y)      : {args.ar_coef}")
     print(f"  β (X→Y)          : {args.beta}")
     print(f"  Y noise std      : {args.noise_std}")
@@ -445,7 +499,7 @@ def main():
     print(f"  Covariate mode   : {args.covariate_mode}")
     if args.covariate_mode == 'static':
         print(f"  X (static) rate  : {args.covar_rate}"
-              f"{' → '+str(args.covar_rate_shift) if args.with_shift else ''}")
+              f"{' →' '+str(args.covar_rate_shift) if args.with_shift else ''}")
     else:
         xr_s = args.x_rate if args.x_rate_shift is None else args.x_rate_shift
         xt_s = args.x_trend if args.x_trend_shift is None else args.x_trend_shift
@@ -457,14 +511,20 @@ def main():
     print(f"  With TEST shift  : {args.with_shift}")
     print(f"  Seed             : {args.seed}")
 
-        # Initialize generator and predictor
+    # Initialize generator
     generator = TimeSeriesGenerator(T=args.T, d=1, seed=args.seed)
-    predictor = BasicConformalPredictor(alpha=args.alpha)
+
+    # Initialize appropriate predictor
+    if args.predictor == "basic":
+        predictor = BasicConformalPredictor(alpha=args.alpha)
+    else:  # adaptive
+        predictor = OnlineConformalPredictor(alpha=args.alpha, window_size=args.window_size)
 
     # Run time-based coverage experiment
     results_by_time = run_time_based_coverage_experiment(
         generator=generator,
         predictor=predictor,
+        predictor_type=args.predictor,
         n_series=args.n_series,
         covariate_mode=args.covariate_mode,
         ar_coef=args.ar_coef,
@@ -486,7 +546,7 @@ def main():
         n_cal=args.n_cal,
     )
 
-    # Compute overall statistics (AFTER results_by_time is defined)
+    # Compute overall statistics
     all_coverage = []
     all_widths = []
     for key, value in results_by_time.items():
@@ -525,6 +585,7 @@ def main():
     plot_time_based_results(
         results_by_time,
         target_coverage,
+        predictor_type=args.predictor,
         covariate_mode=args.covariate_mode,
         with_shift=args.with_shift
     )
