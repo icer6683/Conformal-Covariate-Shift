@@ -289,6 +289,10 @@ def run_time_based_coverage_experiment(
         predictions = []
         intervals = []
         
+        # if t >= 1:
+        predictor.fit_ar_model(train_Y[:,:t+2,:])
+        predictor.calibrate(cal_Y[:,:t+2,:])
+
         for i in range(n_test):
             series = test_data[i]
             
@@ -474,7 +478,7 @@ def main():
     parser.add_argument('--seed', type=int, default=100, help='Random seed')
 
     # Adaptive-specific parameters
-    parser.add_argument('--window_size', type=int, default=100,
+    parser.add_argument('--window_size', type=int, default=800,
                         help='Window size for adaptive predictor (only used with --predictor adaptive)')
 
     # Y model params
