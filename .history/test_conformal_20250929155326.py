@@ -59,7 +59,7 @@ import argparse
 from ts_generator import TimeSeriesGenerator
 from basic_conformal import BasicConformalPredictor
 from adaptive_conformal import OnlineConformalPredictor
-from algorithm_conformal import AlgorithmConformalPredictor
+from algorithm_wrapper import AlgorithmConformalPredictor
 
 
 def run_time_based_coverage_experiment(
