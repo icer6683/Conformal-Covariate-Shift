@@ -133,7 +133,12 @@ class OnlineConformalPredictor:
             conformity_scores.append(score)
         
         # Initialize the conformity score buffer
-        self.conformity_scores = conformity_scores
+        if self.window_size is not None:
+            # Use at most window_size scores
+            self.conformity_scores = conformity_scores[-self.window_size:]
+        else:
+            # Use all scores (growing window)
+            self.conformity_scores = conformity_scores.copy()
         
         # Calculate initial quantile
         initial_quantile = np.quantile(self.conformity_scores, 1 - self.alpha)

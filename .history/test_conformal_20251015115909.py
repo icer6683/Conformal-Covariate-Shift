@@ -59,7 +59,7 @@ import argparse
 from ts_generator import TimeSeriesGenerator
 from basic_conformal import BasicConformalPredictor
 from adaptive_conformal import OnlineConformalPredictor
-from algorithm import AdaptedCAFHT
+from algorithm_conformal import AlgorithmConformalPredictor
 
 
 def run_time_based_coverage_experiment(
@@ -293,10 +293,11 @@ def run_time_based_coverage_experiment(
         predictions = []
         intervals = []
         
-
-        # Use increasing amount of data as time progresses
-        predictor.fit_ar_model(train_Y[:,:t+2,:])
-        predictor.calibrate(cal_Y[:,:t+2,:])
+        # Re-fit and re-calibrate for algorithm predictor to handle shift better
+        if t >= 1 and predictor_type == "algorithm":
+            # Use increasing amount of data as time progresses
+            predictor.fit_ar_model(train_Y[:,:t+2,:])
+            predictor.calibrate(cal_Y[:,:t+2,:])
 
         for i in range(n_test):
             series = test_data[i]
@@ -593,7 +594,7 @@ def main():
     elif args.predictor == "adaptive":
         predictor = OnlineConformalPredictor(alpha=args.alpha, window_size=args.window_size)
     else:  # algorithm
-        predictor = AdaptedCAFHT(alpha=args.alpha)
+        predictor = AlgorithmConformalPredictor(alpha=args.alpha)
 
     # Run time-based coverage experiment
     results_by_time = run_time_based_coverage_experiment(

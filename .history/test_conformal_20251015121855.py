@@ -293,10 +293,11 @@ def run_time_based_coverage_experiment(
         predictions = []
         intervals = []
         
-
-        # Use increasing amount of data as time progresses
-        predictor.fit_ar_model(train_Y[:,:t+2,:])
-        predictor.calibrate(cal_Y[:,:t+2,:])
+        # Re-fit and re-calibrate for algorithm predictor to handle shift better
+        if t >= 1 and predictor_type == "algorithm":
+            # Use increasing amount of data as time progresses
+            predictor.fit_ar_model(train_Y[:,:t+2,:])
+            predictor.calibrate(cal_Y[:,:t+2,:])
 
         for i in range(n_test):
             series = test_data[i]
