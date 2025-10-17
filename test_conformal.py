@@ -295,41 +295,99 @@ def run_time_based_coverage_experiment(
         
 
         # Use increasing amount of data as time progresses
-        predictor.fit_ar_model(train_Y[:,:t+2,:])
-        predictor.calibrate(cal_Y[:,:t+2,:])
+        predictor.fit_ar_model(train_Y[:, :t+2, :])
 
-        for i in range(n_test):
-            series = test_data[i]
-            
-            # Use data up to time t to predict time t+1
-            input_series = series[:t+1]  # Y_0, Y_1, ..., Y_t
-            true_value = series[t+1, 0]   # Y_{t+1}
-            
-            # Get prediction and interval - handle different predictor types
-            if predictor_type == "basic":
+        if predictor_type == "algorithm" and t >= 1:
+            # Split test set into two halves. First half uses second half as "shifted" positives, and vice versa.
+            mid = n_test // 2
+            idx_half1 = np.arange(0, mid)
+            idx_half2 = np.arange(mid, n_test)
+
+            # Prepare prefixes at time t (length t+1)
+            train_prefixes = train_Y[:, :t+1, :]
+
+            # First pass: predict on half1 using half2 to train the classifier
+            predictor.update_weighting_context(
+                train_prefixes=train_prefixes,
+                test_prefixes=test_data[idx_half2, :t+1, :],
+                is_shifted=True
+            )
+            predictor.calibrate(cal_Y[:, :t+2, :])
+            for i in idx_half1:
+                series = test_data[i]
+                input_series = series[:t+1]
+                true_value = series[t+1, 0]
+
                 pred, lower, upper = predictor.predict_with_interval(input_series)
-            elif predictor_type == "adaptive":
-                pred, lower, upper = predictor.predict_with_interval(
-                    input_series
-                )
-            else:  # algorithm
-                pred, lower, upper = predictor.predict_with_interval(
-                    input_series
-                )
-            
-            # Check coverage
-            covered = (lower <= true_value <= upper)
-            coverage_results.append(covered)
-            
-            predictions.append(pred)
-            intervals.append([lower, upper])
-            
-            # STORE DATA FOR THE FIRST SERIES (i == 0)
-            if i == example_idx:  # This will always be 0
-                results_by_time['example_predictions'].append(pred)
-                results_by_time['example_lower_bounds'].append(lower)
-                results_by_time['example_upper_bounds'].append(upper)
-                results_by_time['example_true_values'].append(true_value)
+
+                covered = (lower <= true_value <= upper)
+                coverage_results.append(covered)
+                predictions.append(pred)
+                intervals.append([lower, upper])
+
+                if i == example_idx:
+                    results_by_time['example_predictions'].append(pred)
+                    results_by_time['example_lower_bounds'].append(lower)
+                    results_by_time['example_upper_bounds'].append(upper)
+                    results_by_time['example_true_values'].append(true_value)
+
+            # Second pass: predict on half2 using half1 to train the classifier
+            predictor.update_weighting_context(
+                train_prefixes=train_prefixes,
+                test_prefixes=test_data[idx_half1, :t+1, :],
+                is_shifted=True
+            )
+            predictor.calibrate(cal_Y[:, :t+2, :])
+            for i in idx_half2:
+                series = test_data[i]
+                input_series = series[:t+1]
+                true_value = series[t+1, 0]
+
+                pred, lower, upper = predictor.predict_with_interval(input_series)
+
+                covered = (lower <= true_value <= upper)
+                coverage_results.append(covered)
+                predictions.append(pred)
+                intervals.append([lower, upper])
+
+                if i == example_idx:
+                    results_by_time['example_predictions'].append(pred)
+                    results_by_time['example_lower_bounds'].append(lower)
+                    results_by_time['example_upper_bounds'].append(upper)
+                    results_by_time['example_true_values'].append(true_value)
+
+        else:
+            # Baseline behavior (basic/adaptive, or algorithm with no shift or t==0):
+            predictor.calibrate(cal_Y[:, :t+2, :])
+
+            for i in range(n_test):
+                series = test_data[i]
+
+                # Use data up to time t to predict time t+1
+                input_series = series[:t+1]
+                true_value = series[t+1, 0]
+
+                # Get prediction and interval - handle different predictor types
+                if predictor_type == "basic":
+                    pred, lower, upper = predictor.predict_with_interval(input_series)
+                elif predictor_type == "adaptive":
+                    pred, lower, upper = predictor.predict_with_interval(input_series)
+                else:  # algorithm (no shift or t==0): uniform weights
+                    pred, lower, upper = predictor.predict_with_interval(input_series)
+
+                # Check coverage
+                covered = (lower <= true_value <= upper)
+                coverage_results.append(covered)
+
+                predictions.append(pred)
+                intervals.append([lower, upper])
+
+                # STORE DATA FOR THE FIRST SERIES (i == example_idx)
+                if i == example_idx:
+                    results_by_time['example_predictions'].append(pred)
+                    results_by_time['example_lower_bounds'].append(lower)
+                    results_by_time['example_upper_bounds'].append(upper)
+                    results_by_time['example_true_values'].append(true_value)
         
         coverage_results = np.array(coverage_results)
         predictions = np.array(predictions)
@@ -533,19 +591,19 @@ def main():
         }
     elif args.predictor == "adaptive":
         defaults = {
-            'n_series': 300,
-            'n_train': 600,
-            'n_cal': 100,
+            'n_series': 500,
+            'n_train': 1000,
+            'n_cal': 1000,
             'T': 40,
-            'covar_rate_shift': 4.0
+            'covar_rate_shift': 2.0
         }
     else:  # algorithm
         defaults = {
-            'n_series': 300,
-            'n_train': 600,
-            'n_cal': 150,  # Slightly more for better gamma selection
+            'n_series': 500,
+            'n_train': 1000,
+            'n_cal': 1000,  # Slightly more for better gamma selection
             'T': 40,
-            'covar_rate_shift': 3.5
+            'covar_rate_shift': 2.0
         }
 
     # Apply defaults where arguments weren't provided
