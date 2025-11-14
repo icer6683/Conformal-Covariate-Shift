@@ -114,7 +114,7 @@ def run_time_based_coverage_experiment(
     # -----------------------
     print("Generating training data...")
     if mode == "static":
-        train_Y, _ = generator.generate_with_poisson_covariate(
+        train_Y, train_X_scalar = generator.generate_with_poisson_covariate(
             n=n_train,
             ar_coef=ar_coef,
             beta=beta,
@@ -124,8 +124,10 @@ def run_time_based_coverage_experiment(
             initial_std=1.0,
             trend_coef=trend_coef,
         )
+        L_train = train_Y.shape[1]
+        train_X = np.repeat(train_X_scalar[:, None], L_train, axis=1)
     else:
-        train_Y, _ = generator.generate_with_dynamic_covariate(
+        train_Y, train_X = generator.generate_with_dynamic_covariate(
             n=n_train,
             ar_coef=ar_coef,
             beta=beta,
@@ -144,7 +146,7 @@ def run_time_based_coverage_experiment(
     # -----------------------
     print("Generating calibration data...")
     if mode == "static":
-        cal_Y, _ = generator.generate_with_poisson_covariate(
+        cal_Y, cal_X_scalar = generator.generate_with_poisson_covariate(
             n=n_cal,
             ar_coef=ar_coef,
             beta=beta,
@@ -154,8 +156,10 @@ def run_time_based_coverage_experiment(
             initial_std=1.0,
             trend_coef=trend_coef,
         )
+        L_cal = cal_Y.shape[1]
+        cal_X = np.repeat(cal_X_scalar[:, None], L_cal, axis=1)
     else:
-        cal_Y, _ = generator.generate_with_dynamic_covariate(
+        cal_Y, cal_X = generator.generate_with_dynamic_covariate(
             n=n_cal,
             ar_coef=ar_coef,
             beta=beta,
@@ -185,6 +189,7 @@ def run_time_based_coverage_experiment(
     xl_s = x0_lambda if x0_lambda_shift is None else x0_lambda_shift
 
     test_series_list = []
+    test_X_list = []
     
     for i in range(n_series):
         if (i + 1) % 100 == 0:
@@ -220,7 +225,7 @@ def run_time_based_coverage_experiment(
         # Optionally apply TEST covariate shift via unified function
         if with_shift:
             if mode == "static":
-                Y_shift, _ = generator.introduce_covariate_shift(
+                Y_shift, X_shift_series = generator.introduce_covariate_shift(
                     original_Y=Y_orig,
                     original_X=X_orig,  # shape (1,)
                     covariate_mode="static",
@@ -232,8 +237,10 @@ def run_time_based_coverage_experiment(
                     },
                     shift_params={"shift_rate": covar_rate_shift if covar_rate_shift is not None else 3.0},
                 )
+                test_series = Y_shift[0]              # (T+1, 1)
+                test_X_series = X_shift_series[0]     # (T+1,)
             else:
-                Y_shift, _ = generator.introduce_covariate_shift(
+                Y_shift, X_shift_series = generator.introduce_covariate_shift(
                     original_Y=Y_orig,
                     original_X=X_orig,  # shape (1, T+1)
                     covariate_mode="dynamic",
@@ -251,14 +258,24 @@ def run_time_based_coverage_experiment(
                         "x0_redraw": True,  # per spec
                     },
                 )
-            test_series = Y_shift[0]  # (T+1, 1)
+                test_series = Y_shift[0]              # (T+1, 1)
+                test_X_series = X_shift_series[0]     # (T+1,)
         else:
-            test_series = Y_orig[0]   # (T+1, 1)
+            if mode == "static":
+                # Repeat scalar X across all time steps
+                L_test = Y_orig.shape[1]
+                test_series = Y_orig[0]
+                test_X_series = np.repeat(X_orig[:, None], L_test, axis=1)[0]
+            else:
+                test_series = Y_orig[0]
+                test_X_series = X_orig[0]
         
         test_series_list.append(test_series)
+        test_X_list.append(test_X_series)
 
     # Convert to numpy array
     test_data = np.array(test_series_list)  # Shape: (n_series, T+1, 1)
+    test_X = np.array(test_X_list)  # Shape: (n_series, T+1)
     
     # ALWAYS USE THE FIRST TEST SERIES
     example_idx = 0  # Always use the first series
@@ -295,7 +312,10 @@ def run_time_based_coverage_experiment(
         
 
         # Use increasing amount of data as time progresses
-        predictor.fit_ar_model(train_Y[:, :t+2, :])
+        if predictor_type in ("adaptive", "algorithm"):
+            predictor.fit_ar_model(train_Y[:, :t+2, :], train_X[:, :t+2])
+        else:
+            predictor.fit_ar_model(train_Y[:, :t+2, :])
 
         if predictor_type == "algorithm" and t >= 1:
             # Split test set into two halves. First half uses second half as "shifted" positives, and vice versa.
@@ -310,15 +330,18 @@ def run_time_based_coverage_experiment(
             predictor.update_weighting_context(
                 train_prefixes=train_prefixes,
                 test_prefixes=test_data[idx_half2, :t+1, :],
-                is_shifted=True
+                is_shifted=True,
+                train_X_prefixes=train_X[:, :t+1],
+                test_X_prefixes=test_X[idx_half2, :t+1]
             )
-            predictor.calibrate(cal_Y[:, :t+2, :])
+            predictor.calibrate(cal_Y[:, :t+2, :], cal_X[:, :t+2])
             for i in idx_half1:
                 series = test_data[i]
                 input_series = series[:t+1]
                 true_value = series[t+1, 0]
 
-                pred, lower, upper = predictor.predict_with_interval(input_series)
+                x_prefix = test_X[i, :t+1]
+                pred, lower, upper = predictor.predict_with_interval(input_series, x_prefix)
 
                 covered = (lower <= true_value <= upper)
                 coverage_results.append(covered)
@@ -335,15 +358,18 @@ def run_time_based_coverage_experiment(
             predictor.update_weighting_context(
                 train_prefixes=train_prefixes,
                 test_prefixes=test_data[idx_half1, :t+1, :],
-                is_shifted=True
+                is_shifted=True,
+                train_X_prefixes=train_X[:, :t+1],
+                test_X_prefixes=test_X[idx_half1, :t+1]
             )
-            predictor.calibrate(cal_Y[:, :t+2, :])
+            predictor.calibrate(cal_Y[:, :t+2, :], cal_X[:, :t+2])
             for i in idx_half2:
                 series = test_data[i]
                 input_series = series[:t+1]
                 true_value = series[t+1, 0]
 
-                pred, lower, upper = predictor.predict_with_interval(input_series)
+                x_prefix = test_X[i, :t+1]
+                pred, lower, upper = predictor.predict_with_interval(input_series, x_prefix)
 
                 covered = (lower <= true_value <= upper)
                 coverage_results.append(covered)
@@ -358,7 +384,10 @@ def run_time_based_coverage_experiment(
 
         else:
             # Baseline behavior (basic/adaptive, or algorithm with no shift or t==0):
-            predictor.calibrate(cal_Y[:, :t+2, :])
+            if predictor_type in ("adaptive", "algorithm"):
+                predictor.calibrate(cal_Y[:, :t+2, :], cal_X[:, :t+2])
+            else:
+                predictor.calibrate(cal_Y[:, :t+2, :])
 
             for i in range(n_test):
                 series = test_data[i]
@@ -371,9 +400,11 @@ def run_time_based_coverage_experiment(
                 if predictor_type == "basic":
                     pred, lower, upper = predictor.predict_with_interval(input_series)
                 elif predictor_type == "adaptive":
-                    pred, lower, upper = predictor.predict_with_interval(input_series)
-                else:  # algorithm (no shift or t==0): uniform weights
-                    pred, lower, upper = predictor.predict_with_interval(input_series)
+                    x_prefix = test_X[i, :t+1]
+                    pred, lower, upper = predictor.predict_with_interval(input_series, x_prefix)
+                else:  # algorithm (no shift or t==0)
+                    x_prefix = test_X[i, :t+1]
+                    pred, lower, upper = predictor.predict_with_interval(input_series, x_prefix)
 
                 # Check coverage
                 covered = (lower <= true_value <= upper)
@@ -592,18 +623,18 @@ def main():
     elif args.predictor == "adaptive":
         defaults = {
             'n_series': 500,
-            'n_train': 1000,
-            'n_cal': 1000,
+            'n_train': 500,
+            'n_cal': 500,
             'T': 40,
-            'covar_rate_shift': 2.0
+            'covar_rate_shift': 8.0
         }
     else:  # algorithm
         defaults = {
             'n_series': 500,
-            'n_train': 1000,
-            'n_cal': 1000,  # Slightly more for better gamma selection
+            'n_train': 500,
+            'n_cal': 500,  # Slightly more for better gamma selection
             'T': 40,
-            'covar_rate_shift': 2.0
+            'covar_rate_shift': 8.0
         }
 
     # Apply defaults where arguments weren't provided
