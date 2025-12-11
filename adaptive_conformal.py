@@ -49,133 +49,101 @@ class OnlineConformalPredictor:
         self.quantile_history = []  # Track how quantile evolves
         self.ar_intercept_ = None
         self.ar_coef_ = None
-        self.covar_coef_ = None
         self.residual_quantile = None
     
-    def fit_ar_model(self, train_Y, train_X=None):
+    def fit_ar_model(self, train_data):
         """
-        Fit ARX(1) model WITH INTERCEPT:
-            Y_{t+1} = ar_intercept + ar_coef * Y_t + covar_coef * X_t + noise
-
+        Fit AR(1) model WITH INTERCEPT: Y_t = ar_intercept + ar_coef * Y_{t-1} + noise
+        
         Args:
-            train_Y: Training time series of shape (n, L, d)
-            train_X: Optional covariate series aligned with Y, shape (n, L) or (n, L, 1)
-
+            train_data: Training time series of shape (n, T+1, d)
+        
         Returns:
-            dict: Model parameters (ar_intercept, ar_coef, covar_coef, noise_std)
+            dict: Model parameters (ar_intercept, ar_coef, noise_std)
         """
-        # Extract features (Y_t) and targets (Y_{t+1})
-        Y_prev = train_Y[:, :-1, 0].reshape(-1)
-        Y_next = train_Y[:, 1:, 0].reshape(-1)
-
-        # Build design matrix
-        ones = np.ones_like(Y_prev)
-        cols = [ones, Y_prev]
-
-        # Handle X if provided
-        covar_coef = 0.0
-        if train_X is not None:
-            X_arr = np.asarray(train_X)
-            if X_arr.ndim == 3 and X_arr.shape[2] == 1:
-                X_arr = X_arr[:, :, 0]
-            # use X_t to predict Y_{t+1}
-            X_prev = X_arr[:, :-1].reshape(-1)
-            cols.append(X_prev)
-        X_design = np.column_stack(cols)
-
-        # Least squares fit
-        coeffs, *_ = np.linalg.lstsq(X_design, Y_next, rcond=None)
-        ar_intercept = float(coeffs[0])
-        ar_coef = float(coeffs[1])
-        if len(coeffs) > 2:
-            covar_coef = float(coeffs[2])
-        else:
-            covar_coef = 0.0
-
-        # Residuals and noise std
-        fitted = X_design @ coeffs
-        residuals = Y_next - fitted
-        noise_std = float(np.std(residuals))
-
+        # Extract features (Y_{t-1}) and targets (Y_t)
+        features = train_data[:, :-1, 0].flatten()  # All Y_{t-1}
+        targets = train_data[:, 1:, 0].flatten()   # All Y_t
+        
+        # Create design matrix with intercept term
+        n = len(features)
+        X = np.column_stack([np.ones(n), features])  # [1, Y_{t-1}]
+        
+        # Least squares: [ar_intercept, ar_coef] = (X'X)^{-1} X'y
+        coeffs = np.linalg.lstsq(X, targets, rcond=None)[0]
+        ar_intercept = coeffs[0]
+        ar_coef = coeffs[1]
+        
+        # Compute residuals and noise std
+        predictions = ar_intercept + ar_coef * features
+        residuals = targets - predictions
+        noise_std = np.std(residuals)
+        
         # Store as attributes for compatibility
         self.ar_intercept_ = ar_intercept
         self.ar_coef_ = ar_coef
-        self.covar_coef_ = covar_coef
-
+        
         self.model_params = {
             'ar_intercept': ar_intercept,
             'ar_coef': ar_coef,
-            'covar_coef': covar_coef,
             'noise_std': noise_std
         }
+        
         return self.model_params
     
-    def predict_ar(self, series, x_series=None):
+    def predict_ar(self, series):
         """
-        Make ARX(1) prediction WITH INTERCEPT:
-            Y_{t+1} = ar_intercept + ar_coef * Y_t + covar_coef * X_t
-
+        Make AR(1) prediction WITH INTERCEPT: Y_t = ar_intercept + ar_coef * Y_{t-1}
+        
         Args:
-            series: Time series of shape (L, d)
-            x_series: Optional covariate series aligned with series, shape (L,) or (L,1)
-
+            series: Time series of shape (T+1, d)
+        
         Returns:
             float: Prediction for next time step
         """
         if self.model_params is None:
             raise ValueError("Model not fitted. Call fit_ar_model first.")
-
-        y_t = series[-1, 0]
-        x_t = 0.0
-        if x_series is not None:
-            x_arr = np.asarray(x_series)
-            if x_arr.ndim == 2 and x_arr.shape[1] == 1:
-                x_arr = x_arr[:, 0]
-            x_t = float(x_arr[-1])
-
-        pred = (self.model_params['ar_intercept']
-                + self.model_params['ar_coef'] * y_t
-                + self.model_params.get('covar_coef', 0.0) * x_t)
-        return float(pred)
+        
+        last_value = series[-1, 0]  # Y_{t-1}
+        prediction = self.model_params['ar_intercept'] + self.model_params['ar_coef'] * last_value
+        
+        return prediction
     
-    def calibrate(self, calibration_Y, calibration_X=None):
+    def calibrate(self, calibration_data):
         """
         Initialize conformity scores using calibration data.
-
+        
         Args:
-            calibration_Y: Calibration time series of shape (n_cal, L, d)
-            calibration_X: Optional covariate series of shape (n_cal, L) or (n_cal, L, 1)
+            calibration_data: Calibration time series of shape (n_cal, T+1, d)
         """
         if self.model_params is None:
             raise ValueError("Model not fitted. Call fit_ar_model first.")
-
+        
         conformity_scores = []
-        n_cal = calibration_Y.shape[0]
-
-        for i in range(n_cal):
-            series = calibration_Y[i]
-            x_series = None if calibration_X is None else calibration_X[i]
-
+        
+        for i in range(calibration_data.shape[0]):
+            series = calibration_data[i]
+            
             # Predict last time step using all previous points
-            prediction = self.predict_ar(series[:-1], None if x_series is None else x_series[:-1])
+            prediction = self.predict_ar(series[:-1])
             true_value = series[-1, 0]
-
+            
             # Conformity score = absolute residual
             score = abs(true_value - prediction)
             conformity_scores.append(score)
-
+        
         # Initialize the conformity score buffer
         self.conformity_scores = conformity_scores
-
+        
         # Calculate initial quantile
         initial_quantile = np.quantile(self.conformity_scores, 1 - self.alpha)
         self.residual_quantile = initial_quantile  # Store for compatibility
-
+        
         print(f"Online calibration completed:")
         print(f"  Initial scores: {len(self.conformity_scores)} samples")
         print(f"  Initial {1-self.alpha:.1%} quantile: {initial_quantile:.4f}")
         print(f"  Window size: {self.window_size if self.window_size else 'unlimited (growing)'}")
-
+        
         return conformity_scores
     
     def get_current_quantile(self):
@@ -199,39 +167,39 @@ class OnlineConformalPredictor:
         
         return np.quantile(self.conformity_scores, q_level)
     
-    def predict_with_interval(self, series, x_series=None):
+    def predict_with_interval(self, series):
         """
         Make prediction with adaptive conformal prediction interval.
-
+        
         Args:
-            series: Time series of shape (L, d) (without the target point)
-            x_series: Optional covariate series aligned with series, shape (L,) or (L,1)
-
+            series: Time series of shape (T, d) (without the target point)
+            update_after: If True and true_value provided, update scores
+            true_value: The actual observed value (for updating)
+        
         Returns:
             tuple: (prediction, lower_bound, upper_bound)
         """
         # Make point prediction
-        prediction = self.predict_ar(series, x_series)
-
+        prediction = self.predict_ar(series)
+        
         # Get current quantile
         current_quantile = self.get_current_quantile()
         self.quantile_history.append(current_quantile)
-
+        
         # Create prediction interval
         lower_bound = prediction - current_quantile
         upper_bound = prediction + current_quantile
-
+        
         return prediction, lower_bound, upper_bound
     
-    def evaluate_coverage(self, test_data, test_X=None, adaptive=True):
+    def evaluate_coverage(self, test_data, adaptive=True):
         """
         Evaluate coverage on test data with optional online updates.
-
+        
         Args:
-            test_data: Test time series of shape (n_test, L, d)
-            test_X: Optional covariate series of shape (n_test, L) or (n_test, L, 1)
+            test_data: Test time series of shape (n_test, T+1, d)
             adaptive: If True, update conformity scores online
-
+        
         Returns:
             dict: Coverage statistics including quantile evolution
         """
@@ -240,41 +208,43 @@ class OnlineConformalPredictor:
         intervals = []
         quantiles_over_time = []
         interval_widths = []
-
-        n_test = test_data.shape[0]
-        for i in range(n_test):
+        
+        for i in range(test_data.shape[0]):
             series = test_data[i]
-            x_series = None if test_X is None else test_X[i]
             true_value = series[-1, 0]
-
+            
             # Get prediction and interval
-            pred, lower, upper = self.predict_with_interval(series[:-1], None if x_series is None else x_series[:-1])
-
+            pred, lower, upper = self.predict_with_interval(series[:-1])
+            
             # Check coverage
             covered = (lower <= true_value <= upper)
             coverage_results.append(covered)
-
+            
             predictions.append(pred)
             intervals.append([lower, upper])
             interval_widths.append(upper - lower)
             quantiles_over_time.append(self.get_current_quantile())
-
+            
             # Update scores if adaptive mode is enabled
             if adaptive:
+                # Update conformity scores with observed error
                 new_score = abs(true_value - pred)
                 self.conformity_scores.append(new_score)
+                
+                # Maintain sliding window
                 if self.window_size is not None and len(self.conformity_scores) > self.window_size:
                     self.conformity_scores.pop(0)
-
+            
+            # Print first few for debugging
             if i < 5 or (i > 0 and i % 50 == 0):
                 print(f"Series {i}: pred={pred:.3f}, true={true_value:.3f}, "
                       f"interval=[{lower:.3f}, {upper:.3f}], "
                       f"width={upper-lower:.3f}, covered={'✓' if covered else '✗'}")
-
+        
         coverage_results = np.array(coverage_results)
         predictions = np.array(predictions)
         intervals = np.array(intervals)
-
+        
         results = {
             'coverage_rate': np.mean(coverage_results),
             'coverage_std': np.std(coverage_results),
@@ -288,6 +258,7 @@ class OnlineConformalPredictor:
             'interval_widths': np.array(interval_widths),
             'adaptive': adaptive
         }
+        
         return results
 
 
@@ -434,7 +405,6 @@ def main():
     model_params = predictor.fit_ar_model(train_data)
     print(f"  Estimated AR intercept: {model_params['ar_intercept']:.4f}")
     print(f"  Estimated AR coef: {model_params['ar_coef']:.4f} (true: {args.ar_coef})")
-    print(f"  Estimated covariate coef: {model_params.get('covar_coef', 0.0):.4f}")
     print(f"  Estimated noise std: {model_params['noise_std']:.4f} (true: {args.noise_std})")
     
     # Step 2: Initialize with calibration data
