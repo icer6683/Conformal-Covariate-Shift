@@ -87,7 +87,7 @@ class AdaptedCAFHT:
         if L < 2:
             self._scores = np.array([])
             self._weights = np.array([])
-            self._q = 2.0 * self.noise_std
+            self._q = None
             return
 
         Y = cal_Y_subset[..., 0]
@@ -110,9 +110,10 @@ class AdaptedCAFHT:
 
         self._scores = np.asarray(scores, dtype=float)
         self._weights = np.asarray(weights, dtype=float)
-        self._q = self._weighted_quantile(self._scores, self._weights, 1.0 - self.alpha)
+        # Do not store a single quantile since ACI uses per-series alpha; compute q on demand in predict_with_interval.
+        self._q = None
 
-    def predict_with_interval(self, input_series):
+    def predict_with_interval(self, input_series, alpha_level=None):
         # input_series: (<=t+1, 1), predict next value
         if input_series.ndim == 2 and input_series.shape[1] == 1:
             last_y = float(input_series[-1, 0])
@@ -122,7 +123,18 @@ class AdaptedCAFHT:
             last_y = float(np.ravel(input_series)[-1])
 
         pred = self.ar_intercept + self.ar_coef * last_y
-        q = self._q if self._q is not None else 2.0 * self.noise_std
+
+        # Per-call alpha override for ACI
+        a = self.alpha if alpha_level is None else float(alpha_level)
+        # Clip to avoid degenerate quantiles
+        a = float(np.clip(a, 1e-6, 1.0 - 1e-6))
+
+        # Compute q on demand from cached scores/weights
+        if self._scores is None or self._weights is None or np.asarray(self._scores).size == 0:
+            q = 2.0 * self.noise_std
+        else:
+            q = self._weighted_quantile(self._scores, self._weights, 1.0 - a)
+
         lower = pred - q
         upper = pred + q
         return float(pred), float(lower), float(upper)

@@ -91,6 +91,7 @@ def run_time_based_coverage_experiment(
     with_shift: bool,
     n_train: int,
     n_cal: int,
+    aci_stepsize: float,
 ):
     """
     Run a time-based coverage experiment: evaluate coverage at each time step t.
@@ -261,7 +262,7 @@ def run_time_based_coverage_experiment(
     test_data = np.array(test_series_list)  # Shape: (n_series, T+1, 1)
     
     # ALWAYS USE THE FIRST TEST SERIES
-    example_idx = 0  # Always use the first series
+    example_idx = 15  # Always use the first series
     example_series = test_data[example_idx].copy()  # Shape: (T+1, 1)
     print(f"Storing first test series (index 0) for visualization")
     
@@ -284,15 +285,35 @@ def run_time_based_coverage_experiment(
     results_by_time['example_lower_bounds'] = []
     results_by_time['example_upper_bounds'] = []
     results_by_time['example_true_values'] = []
+    results_by_time['example_alpha_levels'] = []
     
+    # -----------------------
+    # ACI state (algorithm only): per-series nominal alpha
+    # -----------------------
+    base_alpha = float(getattr(predictor, 'alpha', 0.1))
+    if predictor_type == "algorithm":
+        alpha_series = np.full(n_test, base_alpha, dtype=float)  # alpha_1^{(i)} = alpha
+    else:
+        alpha_series = None
+
     # For each time step t, predict step t+1
     for t in range(T):  # t = 0, 1, 2, ..., T-1 (predicting t+1)
         print(f"  Evaluating predictions at time step {t+1}...")
-        
+
+        # ACI: alpha used for bands at this time step (only algorithm)
+        if predictor_type == "algorithm":
+            alpha_used = alpha_series.copy()
+            alpha_next = alpha_series.copy()
+        else:
+            alpha_used = None
+            alpha_next = None
+
+        if predictor_type == "algorithm":
+            results_by_time['example_alpha_levels'].append(float(alpha_used[example_idx]))
+
         coverage_results = []
         predictions = []
         intervals = []
-        
 
         # Use increasing amount of data as time progresses
         predictor.fit_ar_model(train_Y[:, :t+2, :])
@@ -318,9 +339,11 @@ def run_time_based_coverage_experiment(
                 input_series = series[:t+1]
                 true_value = series[t+1, 0]
 
-                pred, lower, upper = predictor.predict_with_interval(input_series)
+                pred, lower, upper = predictor.predict_with_interval(input_series, alpha_level=alpha_used[i])
 
                 covered = (lower <= true_value <= upper)
+                err = 0 if covered else 1
+                alpha_next[i] = alpha_used[i] + aci_stepsize * (base_alpha - err)
                 coverage_results.append(covered)
                 predictions.append(pred)
                 intervals.append([lower, upper])
@@ -343,9 +366,11 @@ def run_time_based_coverage_experiment(
                 input_series = series[:t+1]
                 true_value = series[t+1, 0]
 
-                pred, lower, upper = predictor.predict_with_interval(input_series)
+                pred, lower, upper = predictor.predict_with_interval(input_series, alpha_level=alpha_used[i])
 
                 covered = (lower <= true_value <= upper)
+                err = 0 if covered else 1
+                alpha_next[i] = alpha_used[i] + aci_stepsize * (base_alpha - err)
                 coverage_results.append(covered)
                 predictions.append(pred)
                 intervals.append([lower, upper])
@@ -355,6 +380,9 @@ def run_time_based_coverage_experiment(
                     results_by_time['example_lower_bounds'].append(lower)
                     results_by_time['example_upper_bounds'].append(upper)
                     results_by_time['example_true_values'].append(true_value)
+
+            # ACI: apply alpha updates after completing BOTH halves at this time step
+            alpha_series = np.clip(alpha_next, 1e-6, 1.0 - 1e-6)
 
         else:
             # Baseline behavior (basic/adaptive, or algorithm with no shift or t==0):
@@ -372,8 +400,8 @@ def run_time_based_coverage_experiment(
                     pred, lower, upper = predictor.predict_with_interval(input_series)
                 elif predictor_type == "adaptive":
                     pred, lower, upper = predictor.predict_with_interval(input_series)
-                else:  # algorithm (no shift or t==0): uniform weights
-                    pred, lower, upper = predictor.predict_with_interval(input_series)
+                else:  # algorithm (no shift or t==0)
+                    pred, lower, upper = predictor.predict_with_interval(input_series, alpha_level=alpha_used[i])
 
                 # Check coverage
                 covered = (lower <= true_value <= upper)
@@ -388,11 +416,18 @@ def run_time_based_coverage_experiment(
                     results_by_time['example_lower_bounds'].append(lower)
                     results_by_time['example_upper_bounds'].append(upper)
                     results_by_time['example_true_values'].append(true_value)
-        
+
+                if predictor_type == "algorithm":
+                    err = 0 if covered else 1
+                    alpha_next[i] = alpha_used[i] + aci_stepsize * (base_alpha - err)
+
+            if predictor_type == "algorithm":
+                alpha_series = np.clip(alpha_next, 1e-6, 1.0 - 1e-6)
+
         coverage_results = np.array(coverage_results)
         predictions = np.array(predictions)
         intervals = np.array(intervals)
-        
+
         # Store results for this time step
         results_by_time[t+1] = {
             'coverage_rate': np.mean(coverage_results),
@@ -403,11 +438,14 @@ def run_time_based_coverage_experiment(
             'predictions': predictions,
             'intervals': intervals,
             'coverage_history': coverage_results
+            ,
+            'alpha_mean': float(np.mean(alpha_used)) if alpha_used is not None else None,
+            'alpha_std': float(np.std(alpha_used)) if alpha_used is not None else None
         }
-        
+
         print(f"    Time {t+1}: Coverage = {np.mean(coverage_results):.1%}, "
               f"Width = {np.mean(intervals[:, 1] - intervals[:, 0]):.3f}")
-    
+
     return results_by_time
 
 
@@ -519,8 +557,19 @@ def plot_time_based_results(results_by_time, target_coverage, predictor_type="ba
                        transform=axes[1, 1].transAxes, fontsize=10,
                        bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
     
-    # Hide the unused 6th subplot
-    axes[1, 2].axis('off')
+    # Plot 6: Alpha series for the first test series (algorithm + ACI only)
+    if predictor_type == "algorithm" and 'example_alpha_levels' in results_by_time:
+        alpha_vals = results_by_time['example_alpha_levels']
+        plot_steps_alpha = time_steps[:len(alpha_vals)]
+        axes[1, 2].plot(plot_steps_alpha, alpha_vals, linewidth=2)
+        axes[1, 2].set_ylim(0.0, 1.0)
+        axes[1, 2].set_xlabel('Time Step t')
+        axes[1, 2].set_ylabel('Alpha Level')
+        axes[1, 2].set_title('First Test Series: ACI Alpha Over Time')
+        axes[1, 2].grid(True, alpha=0.3)
+    else:
+        # Hide the unused 6th subplot
+        axes[1, 2].axis('off')
     
     plt.tight_layout()
     plt.show()
@@ -541,6 +590,8 @@ def main():
     parser.add_argument('--n_cal', type=int, default=None,
                         help='Number of calibration series (default varies by predictor)')
     parser.add_argument('--alpha', type=float, default=0.1, help='Miscoverage level')
+    parser.add_argument('--aci_stepsize', type=float, default=0.005,
+                        help='ACI stepsize γ for algorithm predictor (default 0.005)')
     parser.add_argument('--T', type=int, default=None,
                         help='Time series length (default varies by predictor)')
     parser.add_argument('--seed', type=int, default=100, help='Random seed')
@@ -677,6 +728,7 @@ def main():
         with_shift=args.with_shift,
         n_train=args.n_train,
         n_cal=args.n_cal,
+        aci_stepsize=args.aci_stepsize,
     )
 
     # Compute overall statistics
