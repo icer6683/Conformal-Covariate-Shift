@@ -60,7 +60,8 @@ from ts_generator import TimeSeriesGenerator
 from basic_conformal import BasicConformalPredictor
 from adaptive_conformal import OnlineConformalPredictor
 from algorithm import AdaptedCAFHT
-
+# Candidate ACI stepsizes for gamma selection
+GAMMA_GRID = [0.001, 0.005, 0.01, 0.05, 0.1]
 
 def run_time_based_coverage_experiment(
     generator: TimeSeriesGenerator,
@@ -295,6 +296,11 @@ def run_time_based_coverage_experiment(
         alpha_series = np.full(n_test, base_alpha, dtype=float)  # alpha_1^{(i)} = alpha
     else:
         alpha_series = None
+    
+    # ACI gamma selection state (algorithm only)
+    gamma_opt = float(aci_stepsize)
+    if predictor_type == "algorithm":
+        results_by_time['gamma_opt_history'] = []
 
     # For each time step t, predict step t+1
     for t in range(T):  # t = 0, 1, 2, ..., T-1 (predicting t+1)
@@ -310,6 +316,23 @@ def run_time_based_coverage_experiment(
 
         if predictor_type == "algorithm":
             results_by_time['example_alpha_levels'].append(float(alpha_used[example_idx]))
+
+        # -------------------------------------------------
+        # Gamma selection: every 10 steps, pick best gamma on a 3-way split of training data
+        # -------------------------------------------------
+        if predictor_type == "algorithm" and t > 0 and (t % 10 == 0):
+            sel_seed = int(getattr(generator, 'seed', 0)) + 10000 + t
+            gamma_opt, _gamma_scores = _select_gamma_simple_aci(
+                train_Y=train_Y,
+                base_alpha=base_alpha,
+                t_max=t,
+                gamma_grid=GAMMA_GRID,
+                seed=sel_seed,
+            )
+
+        if predictor_type == "algorithm":
+            results_by_time['gamma_opt_history'].append(float(gamma_opt))
+
 
         coverage_results = []
         predictions = []
@@ -343,7 +366,7 @@ def run_time_based_coverage_experiment(
 
                 covered = (lower <= true_value <= upper)
                 err = 0 if covered else 1
-                alpha_next[i] = alpha_used[i] + aci_stepsize * (base_alpha - err)
+                alpha_next[i] = alpha_used[i] + gamma_opt * (base_alpha - err)
                 coverage_results.append(covered)
                 predictions.append(pred)
                 intervals.append([lower, upper])
@@ -370,7 +393,7 @@ def run_time_based_coverage_experiment(
 
                 covered = (lower <= true_value <= upper)
                 err = 0 if covered else 1
-                alpha_next[i] = alpha_used[i] + aci_stepsize * (base_alpha - err)
+                alpha_next[i] = alpha_used[i] + gamma_opt * (base_alpha - err)
                 coverage_results.append(covered)
                 predictions.append(pred)
                 intervals.append([lower, upper])
@@ -419,7 +442,7 @@ def run_time_based_coverage_experiment(
 
                 if predictor_type == "algorithm":
                     err = 0 if covered else 1
-                    alpha_next[i] = alpha_used[i] + aci_stepsize * (base_alpha - err)
+                    alpha_next[i] = alpha_used[i] + gamma_opt * (base_alpha - err)
 
             if predictor_type == "algorithm":
                 alpha_series = np.clip(alpha_next, 1e-6, 1.0 - 1e-6)
@@ -440,13 +463,119 @@ def run_time_based_coverage_experiment(
             'coverage_history': coverage_results
             ,
             'alpha_mean': float(np.mean(alpha_used)) if alpha_used is not None else None,
-            'alpha_std': float(np.std(alpha_used)) if alpha_used is not None else None
+            'alpha_std': float(np.std(alpha_used)) if alpha_used is not None else None,
+            'gamma_opt': float(gamma_opt) if predictor_type == "algorithm" else None
         }
 
         print(f"    Time {t+1}: Coverage = {np.mean(coverage_results):.1%}, "
               f"Width = {np.mean(intervals[:, 1] - intervals[:, 0]):.3f}")
 
     return results_by_time
+
+
+
+def _select_gamma_simple_aci(train_Y: np.ndarray, base_alpha: float, t_max: int,
+                            gamma_grid, seed: int = 0):
+    """
+    Select gamma by running simple ACI (no LR weighting) on a 3-way split of train_Y up to time t_max.
+
+    Split:
+      - D_tr^(1): fit AR model
+      - D_tr^(2): calibration
+      - D_tr^(3): evaluation
+
+    Metric: average coverage over second half of the horizon (in time-index t space).
+
+    Args:
+        train_Y: (n_train, T+1, 1)
+        base_alpha: target miscoverage alpha
+        t_max: current outer-loop t (0-based). We simulate steps 0..t_max (predicting 1..t_max+1).
+        gamma_grid: iterable of candidate gammas
+        seed: RNG seed for splitting
+
+    Returns:
+        (best_gamma, scores_dict) where scores_dict maps gamma -> metric
+    """
+    n_train, Tp1, _ = train_Y.shape
+    if n_train < 9 or t_max < 2:
+        return float(list(gamma_grid)[0]), {float(g): float('nan') for g in gamma_grid}
+
+    rng = np.random.default_rng(seed)
+    perm = rng.permutation(n_train)
+
+    n1 = n_train // 3
+    n2 = n_train // 3
+    n3 = n_train - n1 - n2
+    if n1 == 0 or n2 == 0 or n3 == 0:
+        return float(list(gamma_grid)[0]), {float(g): float('nan') for g in gamma_grid}
+
+    idx1 = perm[:n1]
+    idx2 = perm[n1:n1 + n2]
+    idx3 = perm[n1 + n2:]
+
+    tr1 = train_Y[idx1]
+    tr2 = train_Y[idx2]
+    tr3 = train_Y[idx3]
+
+    # Ensure we don't exceed available time length
+    horizon = min(t_max, Tp1 - 2)  # t ranges 0..horizon
+    start_eval = max(0, horizon // 2)  # second half (in t-index)
+
+    scores = {}
+    target = 1.0 - base_alpha
+
+    for gamma in gamma_grid:
+        gamma = float(gamma)
+
+        tmp = AdaptedCAFHT(alpha=base_alpha)
+        if hasattr(tmp, "reset_adaptation"):
+            tmp.reset_adaptation()
+
+        alpha_series = np.full(tr3.shape[0], base_alpha, dtype=float)
+        cov_hist = []
+
+        for t in range(horizon + 1):
+            tmp.fit_ar_model(tr1[:, :t + 2, :])
+            tmp.calibrate(tr2[:, :t + 2, :])
+
+            alpha_used = alpha_series.copy()
+            alpha_next = alpha_series.copy()
+
+            step_cov = []
+            for i in range(tr3.shape[0]):
+                series = tr3[i]
+                input_series = series[:t + 1]
+                true_value = series[t + 1, 0]
+
+                pred, lower, upper = tmp.predict_with_interval(input_series, alpha_level=alpha_used[i])
+                covered = (lower <= true_value <= upper)
+                step_cov.append(1 if covered else 0)
+
+                err = 0 if covered else 1
+                alpha_next[i] = alpha_used[i] + gamma * (base_alpha - err)
+
+            alpha_series = np.clip(alpha_next, 1e-6, 1.0 - 1e-6)
+            cov_hist.append(float(np.mean(step_cov)) if step_cov else float('nan'))
+
+        tail = cov_hist[start_eval:]
+        metric = float(np.mean(tail)) if len(tail) > 0 else float('nan')
+        scores[gamma] = metric
+
+    # Choose gamma whose metric is closest to target coverage
+    best_gamma = float(list(gamma_grid)[0])
+    best_obj = float('inf')
+    for gamma, metric in scores.items():
+        if not np.isfinite(metric):
+            continue
+        obj = abs(metric - target)
+        if obj < best_obj:
+            best_obj = obj
+            best_gamma = float(gamma)
+
+    return best_gamma, scores
+
+
+
 
 
 def plot_time_based_results(results_by_time, target_coverage, predictor_type="basic", 
