@@ -24,6 +24,7 @@ from datetime import datetime
 from tqdm import tqdm  # For progress bars (pip install tqdm)
 
 from ts_generator import TimeSeriesGenerator
+from basic_conformal import BasicConformalPredictor
 from adaptive_conformal import OnlineConformalPredictor
 from algorithm import AdaptedCAFHT
 from test_conformal import run_time_based_coverage_experiment, GAMMA_GRID
@@ -109,7 +110,9 @@ class MultiSeedExperiment:
     
     def _create_predictor(self, config: dict):
         """Create predictor based on configuration."""
-        if config['predictor'] == 'adaptive':
+        if config['predictor'] == 'basic':
+            return BasicConformalPredictor(alpha=config['alpha'])
+        elif config['predictor'] == 'adaptive':
             return OnlineConformalPredictor(
                 alpha=config['alpha'],
                 window_size=config.get('window_size', 800)

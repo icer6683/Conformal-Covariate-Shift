@@ -159,7 +159,7 @@ class AdaptedCAFHT:
         y = np.concatenate([np.zeros(N0, dtype=int), np.ones(N1, dtype=int)])
 
         if _SKLEARN_AVAILABLE:
-            kw = dict(max_iter=1000, solver="lbfgs", warm_start=False, class_weight="balanced")
+            kw = dict(max_iter=1000, solver="lbfgs", warm_start=False)
             # user kwargs may include random_state, C, etc., but we ensure warm_start=False for reset
             user_kw = dict(self.logistic_kwargs) if self.logistic_kwargs is not None else {}
             if "warm_start" in user_kw:
