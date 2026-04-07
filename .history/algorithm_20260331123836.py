@@ -34,19 +34,24 @@ class AdaptedCAFHT:
         self._clf = None
 
     def fit_ar_model(self, Y_subset):
+        # Y_subset: (n_series, L, 1), with transitions from 0..L-2 -> 1..L-1
         n, L, _ = Y_subset.shape
         if L < 2:
             return
+        x_list = []
+        y_list = []
         Y = Y_subset[..., 0]
-        x_list = [Y[:, t] for t in range(L - 1)]
-        y_list = [Y[:, t + 1] for t in range(L - 1)]
+        for t in range(L - 1):
+            x_list.append(Y[:, t])
+            y_list.append(Y[:, t + 1])
         X = np.concatenate([x[:, None] for x in x_list], axis=0)
-        y = np.concatenate(y_list, axis=0)
+        y = np.concatenate([y for y in y_list], axis=0)
         X_design = np.column_stack([np.ones_like(X), X])
         theta, *_ = np.linalg.lstsq(X_design, y, rcond=None)
         self.ar_intercept = float(theta[0])
         self.ar_coef = float(theta[1])
-        resid = y - X_design @ theta
+        y_hat = X_design @ theta
+        resid = y - y_hat
         self.noise_std = (float(np.std(resid, ddof=1)) if resid.size > 1
                           else float(np.abs(resid).mean() + 1e-6))
 
@@ -58,14 +63,15 @@ class AdaptedCAFHT:
         Update context for density-ratio weighting.
 
         Args:
-            train_prefixes:   (n_train, t+1, 1)        Y history, train tickers
-            test_prefixes:    (n_half,  t+1, 1)        Y history, test-ctx tickers
+            train_prefixes:   (n_train, t+1, 1)   Y history for train tickers
+            test_prefixes:    (n_half,  t+1, 1)   Y history for test (ctx) tickers
             is_shifted:       bool
-            train_X_prefixes: (n_train, t+1, n_cov)   optional X history, train
-            test_X_prefixes:  (n_half,  t+1, n_cov)   optional X history, test-ctx
+            train_X_prefixes: (n_train, t+1, n_cov) optional X history, train
+            test_X_prefixes:  (n_half,  t+1, n_cov) optional X history, test ctx
 
-        If X prefixes are provided they are passed alongside Y into
-        _featurize_prefixes, which computes summary statistics over both.
+        If X prefixes are supplied they are concatenated with Y along the
+        feature axis before featurization, giving the classifier access to
+        both return history and covariate history.
         """
         if train_prefixes is None or test_prefixes is None:
             self._is_shifted_ctx = False
@@ -85,24 +91,35 @@ class AdaptedCAFHT:
             return
 
         self._is_shifted_ctx = True
-        self._train_feat_t = self._featurize_prefixes(
-            train_prefixes, train_X_prefixes)
-        self._test_feat_t = self._featurize_prefixes(
-            test_prefixes, test_X_prefixes)
+
+        # Concatenate X onto Y along the last axis if X prefixes are provided.
+        # train_prefixes shape: (n, t+1, 1)  →  after concat: (n, t+1, 1+n_cov)
+        if train_X_prefixes is not None and test_X_prefixes is not None:
+            train_combined = np.concatenate([train_prefixes, train_X_prefixes], axis=-1)
+            test_combined  = np.concatenate([test_prefixes,  test_X_prefixes],  axis=-1)
+        else:
+            train_combined = train_prefixes
+            test_combined  = test_prefixes
+
+        self._train_feat_t = self._featurize_prefixes(train_combined)
+        self._test_feat_t  = self._featurize_prefixes(test_combined)
         self._clf = None
 
     def calibrate(self, cal_Y_subset):
+        # cal_Y_subset: (n_cal, t+2, 1); predict last step using previous value
         n_cal, L, _ = cal_Y_subset.shape
         if L < 2:
             self._scores = np.array([])
             self._weights = np.array([])
             self._q = None
             return
+
         Y = cal_Y_subset[..., 0]
         y_prev = Y[:, -2]
         y_true = Y[:, -1]
         y_pred = self.ar_intercept + self.ar_coef * y_prev
         scores = np.abs(y_true - y_pred)
+
         if (not self._is_shifted_ctx) or (self._t_ctx is None) or (self._t_ctx <= 0):
             weights = np.ones_like(scores, dtype=float)
         else:
@@ -113,6 +130,7 @@ class AdaptedCAFHT:
                 testX=self._test_feat_t,
                 evalX=calX,
             )
+
         self._scores = np.asarray(scores, dtype=float)
         self._weights = np.asarray(weights, dtype=float)
         self._q = None
@@ -124,32 +142,34 @@ class AdaptedCAFHT:
             last_y = float(input_series[-1])
         else:
             last_y = float(np.ravel(input_series)[-1])
+
         pred = self.ar_intercept + self.ar_coef * last_y
-        a = float(np.clip(
-            self.alpha if alpha_level is None else float(alpha_level),
-            1e-6, 1.0 - 1e-6))
+        a = self.alpha if alpha_level is None else float(alpha_level)
+        a = float(np.clip(a, 1e-6, 1.0 - 1e-6))
+
         if self._scores is None or self._weights is None or np.asarray(self._scores).size == 0:
             q = 2.0 * self.noise_std
         else:
             q = self._weighted_quantile(self._scores, self._weights, 1.0 - a)
+
         return float(pred), float(pred - q), float(pred + q)
 
-    def _featurize_prefixes(self, Y_prefixes, X_prefixes=None):
+    def _featurize_prefixes(self, prefixes):
         """
-        Default featurizer — uses only the last time step's value of Y.
-        Monkey-patched in finance_conformal.py with the richer Y+X summary
-        version when with_shift=True.
+        Default featurizer — uses only the last time step's value of the
+        first channel (Y).  Monkey-patched in finance_conformal.py with the
+        windowed X+Y version when with_shift=True.
 
-        Y_prefixes: (n, t+1, 1)
-        X_prefixes: (n, t+1, n_cov)  optional, ignored in default version
-        Returns:    (n, 1)
+        prefixes: (n, t+1, n_channels)  where channel 0 is Y.
+        Returns:  (n, 1)
         """
-        Y = Y_prefixes[..., 0]
+        Y = prefixes[..., 0]
         return Y[:, -1].reshape(-1, 1)
 
     def _compute_density_ratio_weights(self, trainX, testX, evalX):
         if trainX is None or testX is None or trainX.size == 0 or testX.size == 0:
             return np.ones(evalX.shape[0], dtype=float)
+
         self._clf = None
         N0 = trainX.shape[0]
         N1 = testX.shape[0]
@@ -173,14 +193,17 @@ class AdaptedCAFHT:
         eps   = 1e-6
         prob1 = np.clip(prob1, eps, 1.0 - eps)
 
-        # class_weight='balanced' removes the prior from prob1, so the ratio
-        # prob1/(1-prob1) is already a pure likelihood ratio — no prior_ratio
-        # multiplication needed.
+        # With class_weight='balanced' the classifier is trained on a
+        # rebalanced dataset, so prob1 ≈ P(x | test) / (P(x|test)+P(x|train))
+        # i.e. the likelihood ratio without the prior.  We therefore do NOT
+        # multiply by the prior ratio N1/N0 here — that would double-count it.
         ratio = prob1 / (1.0 - prob1)
         ratio = np.maximum(ratio, eps)
 
-        # Clip at 5x mean to prevent weight degeneracy
-        ratio = np.minimum(ratio, 5.0 * np.mean(ratio))
+        # Weight clipping: prevent any single cal point from dominating the
+        # weighted quantile (importance-sampling degeneracy).
+        clip_thresh = 5.0 * np.mean(ratio)
+        ratio = np.minimum(ratio, clip_thresh)
 
         s = np.sum(ratio)
         if not np.isfinite(s) or s <= 0:

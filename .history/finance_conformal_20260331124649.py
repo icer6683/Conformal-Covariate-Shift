@@ -7,25 +7,31 @@ FINANCE CONFORMAL PREDICTION  —  AdaptedCAFHT on S&P 500 data
 QUICK START
 -----------
 Step 1 — pull data (once):
-  python finance_data.py --pull --start 2024-04-01 --end 2024-06-01
+  python finance_data.py --pull --start 2022-01-01 --end 2024-04-01
 
 Step 2 — run experiment:
 
   # Technology as test sector, no shift correction (default):
-  python finance_conformal.py --npz sp500_20241001_20241129.npz  --test_sector Technology
+  python finance_conformal.py --npz sp500_20240102_20240229.npz --test_sector Technology
 
-  # Technology as test sector, WITH shift correction:
-  python finance_conformal.py --npz sp500_20241001_20241129.npz  --test_sector Technology --with_shift
+  # Technology as test sector, WITH shift correction (default window=5):
+  python finance_conformal.py --npz sp500_20240102_20240229.npz --test_sector Technology --with_shift
+
+  # Change the look-back window used by the classifier featurizer:
+  python finance_conformal.py --npz sp500_20240102_20240229.npz --test_sector Technology --with_shift --window 10
 
   # Other sectors:
-  python finance_conformal.py --npz sp500_20231004_20240328.npz --test_sector Healthcare --with_shift
-  python finance_conformal.py --npz sp500_20231004_20240328.npz --test_sector Energy --with_shift
+  python finance_conformal.py --npz sp500_20240102_20240229.npz --test_sector Healthcare --with_shift
+  python finance_conformal.py --npz sp500_20240102_20240229.npz --test_sector Financials --with_shift
 
 FULL OPTIONS
 ------------
   --npz          Path to .npz data file (required)
   --test_sector  Sector held out as test set (required)
   --with_shift   Enable likelihood-ratio covariate-shift weighting.
+  --window       Number of most-recent time steps fed to the LR classifier
+                 as raw (un-summarised) Y and X values.  Default: 5.
+                 At time t the classifier sees the last min(window, t) steps.
   --alpha        Miscoverage level. Default: 0.1  (targets 90% coverage)
   --cal_frac     Fraction of non-test tickers used for calibration. Default: 0.5
   --gamma_grid   Space-separated ACI step-size candidates.
@@ -33,17 +39,26 @@ FULL OPTIONS
   --save_plot    Path to save the output figure.
   --save_json    Path to save results as JSON.
 
-FEATURIZER
-----------
-  Y features — computed over the most recent Y_WINDOW=30 steps of Y
-  (or fewer if t < Y_WINDOW):
-    Y_mean, Y_std, Y_ar1
+HOW THE FEATURIZER WORKS
+-------------------------
+  Previous versions featurized only Y using summary statistics (mean, std,
+  AR(1) slope, etc.) over the full prefix.  This version instead uses:
 
-  X features — mean of each covariate over the full prefix:
-    X_mean_k for each covariate k
+    raw Y values  for the last `window` steps  (window × 1 floats)
+    raw X values  for the last `window` steps  (window × n_cov floats)
 
-  No z-score standardisation. No regularisation override (uses algorithm.py
-  default C=1.0).
+  concatenated into a flat vector of length window × (1 + n_cov).
+
+  Using raw values rather than summaries preserves the temporal ordering
+  within the window and lets the classifier learn patterns like "Technology
+  tickers tend to have high OvernightGapReturn in recent days."
+
+  When t < window the available steps are zero-padded on the left so the
+  feature vector always has the same length regardless of t.
+
+  The featurizer is monkey-patched onto the predictor instance so algorithm.py
+  is not modified at runtime — the patch only affects the single instance used
+  in run_finance_experiment.
 =============================================================================
 """
 import argparse
@@ -55,55 +70,43 @@ import matplotlib.pyplot as plt
 from finance_data import load_stored
 from algorithm import AdaptedCAFHT
 
-GAMMA_GRID    = [0.001, 0.005, 0.01, 0.05]
-Y_WINDOW      = 30
-AR1_MIN_STEPS = 5
+GAMMA_GRID = [0.001, 0.005, 0.01, 0.05]
+DEFAULT_WINDOW = 5
 
 
 # =============================================================================
-# Featurizer: rolling window Y summaries + full-prefix X means
+# Windowed X+Y featurizer
 # =============================================================================
-def _featurize_YX_summaries(self, Y_prefixes, X_prefixes=None):
+def _make_windowed_featurizer(window, n_cov):
     """
-    Y_prefixes: (n, t+1, 1)
-    X_prefixes: (n, t+1, n_cov)  optional
+    Returns a bound-method-compatible featurizer function that closes over
+    `window` and `n_cov`.
 
-    Y features (3) over last Y_WINDOW steps:
-      Y_mean, Y_std, Y_ar1
+    The returned function expects prefixes of shape (n, t+1, 1+n_cov) where
+    channel 0 is Y and channels 1..n_cov are the X covariates.  It extracts
+    the last `window` time steps of both Y and X and flattens them into a
+    single vector per series.
 
-    X features (n_cov) over full prefix:
-      mean of each covariate
+    Output shape: (n, window * (1 + n_cov))
 
-    No normalisation applied.
+    Zero-padding is applied on the LEFT when fewer than `window` steps are
+    available (i.e. early in the time loop when t < window).
     """
-    Y = Y_prefixes[..., 0]      # (n, t+1)
-    n, T = Y.shape
+    feat_len = window * (1 + n_cov)
 
-    # Rolling window for Y features
-    w   = min(Y_WINDOW, T)
-    Y_w = Y[:, -w:]             # (n, w)
+    def _featurize(self, prefixes):
+        # prefixes: (n, t+1, 1+n_cov)
+        n, T, n_channels = prefixes.shape
+        # Take the last `window` steps; zero-pad left if T < window
+        if T >= window:
+            chunk = prefixes[:, -window:, :]          # (n, window, n_channels)
+        else:
+            pad   = np.zeros((n, window - T, n_channels), dtype=prefixes.dtype)
+            chunk = np.concatenate([pad, prefixes], axis=1)  # (n, window, n_channels)
+        # Flatten time and channel dims → (n, window*(1+n_cov))
+        return chunk.reshape(n, -1)
 
-    y_mean = Y_w.mean(axis=1)
-    y_std  = Y_w.std(axis=1) + 1e-8
-
-    if w >= AR1_MIN_STEPS:
-        x_ar = Y_w[:, :-1]
-        y_ar = Y_w[:, 1:]
-        x_c  = x_ar - x_ar.mean(axis=1, keepdims=True)
-        y_c  = y_ar - y_ar.mean(axis=1, keepdims=True)
-        num  = (x_c * y_c).sum(axis=1)
-        den  = (x_c ** 2).sum(axis=1) + 1e-8
-        y_ar1 = np.clip(num / den, -5.0, 5.0)
-    else:
-        y_ar1 = np.zeros(n)
-
-    y_feats = np.column_stack([y_mean, y_std, y_ar1])  # (n, 3)
-
-    if X_prefixes is not None and X_prefixes.shape[-1] > 0:
-        x_means = X_prefixes.mean(axis=1)              # (n, n_cov)
-        return np.concatenate([y_feats, x_means], axis=1)
-
-    return y_feats
+    return _featurize
 
 
 # =============================================================================
@@ -114,15 +117,15 @@ def _print_weight_diagnostic(weights, t, label=""):
     is_uniform = bool(np.allclose(w, w[0], rtol=1e-4, atol=1e-6))
     lo, hi = w.min(), w.max()
     if hi > lo:
-        edges     = np.linspace(lo, hi, 6)
+        edges    = np.linspace(lo, hi, 6)
         counts, _ = np.histogram(w, bins=edges)
-        hist_str  = "  ".join(
+        hist_str = "  ".join(
             f"[{edges[i]:.4f},{edges[i+1]:.4f}): {counts[i]}" for i in range(5)
         )
     else:
         hist_str = f"all values = {lo:.6f}"
-    ess = float(1.0 / ((w / w.sum()) ** 2).sum()) if w.sum() > 0 else 0.0
     tag = f" {label}" if label else ""
+    ess = float(1.0 / ((w / w.sum()) ** 2).sum()) if w.sum() > 0 else 0.0
     print(f"  [WeightDiag t={t:3d}{tag}]"
           f"  n={len(w)}  min={lo:.5f}  max={hi:.5f}"
           f"  mean={w.mean():.5f}  std={w.std():.5f}"
@@ -131,24 +134,35 @@ def _print_weight_diagnostic(weights, t, label=""):
     print(f"    histogram: {hist_str}")
 
 
-def _print_feature_diagnostic(predictor, cal_feat, t, feat_names):
+def _print_feature_diagnostic(predictor, cal_feat, t, window, n_cov):
+    """
+    For windowed raw features the columns are ordered as:
+      [Y_t-w, Y_t-w+1, ..., Y_t-1,
+       X0_t-w, ..., X0_t-1,
+       X1_t-w, ..., X1_t-1, ...]
+    We print per-channel aggregate separation rather than per-column to keep
+    output readable.
+    """
     train_feat = predictor._train_feat_t
     test_feat  = predictor._test_feat_t
     if train_feat is None or test_feat is None:
         print(f"  [FeatDiag t={t:3d}] features not set")
         return
     print(f"  [FeatDiag t={t:3d}]  train={train_feat.shape}  "
-          f"test={test_feat.shape}  cal={cal_feat.shape}  "
-          f"(Y window=min({Y_WINDOW},t))")
-    for col in range(train_feat.shape[1]):
-        tr   = train_feat[:, col]
-        te   = test_feat[:, col]
-        ca   = cal_feat[:, col]
+          f"test={test_feat.shape}  cal={cal_feat.shape}")
+    n_channels = 1 + n_cov
+    chan_names = ["Y"] + [f"X{i}" for i in range(n_cov)]
+    for c in range(n_channels):
+        # columns for this channel across all window steps
+        cols = list(range(c * window, (c + 1) * window))
+        tr   = train_feat[:, cols].ravel()
+        te   = test_feat[:, cols].ravel()
+        ca   = cal_feat[:, cols].ravel()
         sep  = abs(tr.mean() - te.mean()) / (tr.std() + te.std() + 1e-8)
-        name = feat_names[col] if col < len(feat_names) else f"feat{col}"
-        print(f"    {name:30s}  "
+        print(f"    {chan_names[c]:6s}  "
               f"train: mean={tr.mean():+.4f} std={tr.std():.4f}  "
               f"test:  mean={te.mean():+.4f} std={te.std():.4f}  "
+              f"cal:   mean={ca.mean():+.4f} std={ca.std():.4f}  "
               f"|sep|={sep:.3f}")
 
 
@@ -161,19 +175,19 @@ def _print_classifier_diagnostic(predictor, cal_feat, t):
     test_feat  = predictor._test_feat_t
     if train_feat is None or test_feat is None:
         return
-    N0, N1    = train_feat.shape[0], test_feat.shape[0]
-    X_all     = np.vstack([train_feat, test_feat])
-    y_all     = np.concatenate([np.zeros(N0, dtype=int), np.ones(N1, dtype=int)])
-    acc        = clf.score(X_all, y_all)
-    coef_norm  = float(np.linalg.norm(clf.coef_))
-    prob_cal   = clf.predict_proba(cal_feat)[:, 1]
+    N0, N1  = train_feat.shape[0], test_feat.shape[0]
+    X_all   = np.vstack([train_feat, test_feat])
+    y_all   = np.concatenate([np.zeros(N0, dtype=int), np.ones(N1, dtype=int)])
+    acc      = clf.score(X_all, y_all)
+    coef_norm = float(np.linalg.norm(clf.coef_))
+    prob_cal  = clf.predict_proba(cal_feat)[:, 1]
     print(f"  [CLFDiag t={t:3d}]  train_acc={acc:.3f}  coef_norm={coef_norm:.4f}  "
           f"prob1_cal: min={prob_cal.min():.3f}  max={prob_cal.max():.3f}  "
           f"mean={prob_cal.mean():.3f}  std={prob_cal.std():.4f}")
 
 
 # =============================================================================
-# Linear prediction model
+# Linear prediction model (unchanged from before)
 # =============================================================================
 class LinearCovariateModel:
     def __init__(self, cov_names):
@@ -206,7 +220,7 @@ class LinearCovariateModel:
 
 
 # =============================================================================
-# Gamma selection
+# Gamma selection (unchanged from before)
 # =============================================================================
 def _select_gamma(Y_train, X_train, cov_names, base_alpha, t_max, gamma_grid, seed=0):
     n_train = Y_train.shape[0]
@@ -214,7 +228,9 @@ def _select_gamma(Y_train, X_train, cov_names, base_alpha, t_max, gamma_grid, se
         return float(gamma_grid[0]), {float(g): float('nan') for g in gamma_grid}
     rng  = np.random.default_rng(seed)
     perm = rng.permutation(n_train)
-    n1 = n_train // 3;  n2 = n_train // 3;  n3 = n_train - n1 - n2
+    n1   = n_train // 3
+    n2   = n_train // 3
+    n3   = n_train - n1 - n2
     if n1 == 0 or n2 == 0 or n3 == 0:
         return float(gamma_grid[0]), {float(g): float('nan') for g in gamma_grid}
     idx1 = perm[:n1];  idx2 = perm[n1:n1+n2];  idx3 = perm[n1+n2:]
@@ -222,23 +238,25 @@ def _select_gamma(Y_train, X_train, cov_names, base_alpha, t_max, gamma_grid, se
     Y_cal_sel = Y_train[idx2];  X_cal_sel = X_train[idx2]
     Y_eval    = Y_train[idx3];  X_eval    = X_train[idx3]
     n_eval    = Y_eval.shape[0]
-    horizon   = min(t_max, Y_train.shape[1] - 1)
+    L         = Y_train.shape[1]
+    horizon   = min(t_max, L - 1)
     start_eval = max(0, horizon // 2)
     target    = 1.0 - base_alpha
     scores    = {}
     for gamma in gamma_grid:
-        gamma        = float(gamma)
-        predictor    = AdaptedCAFHT(alpha=base_alpha)
+        gamma      = float(gamma)
+        predictor  = AdaptedCAFHT(alpha=base_alpha)
         alpha_series = np.full(n_eval, base_alpha, dtype=float)
-        cov_hist     = []
+        cov_hist   = []
         for t in range(horizon + 1):
             sel_model = LinearCovariateModel(cov_names)
             sel_model.fit(Y_fit_sel[:, :t+1, :], X_fit_sel[:, :t+1, :])
             predictor.noise_std = sel_model.noise_std
-            cal_scores = [
-                abs(float(Y_cal_sel[i, s, 0]) - sel_model.predict(X_cal_sel[i, s, :]))
-                for i in range(len(idx2)) for s in range(t + 1)
-            ]
+            cal_scores = []
+            for i in range(len(idx2)):
+                for s in range(t + 1):
+                    cal_scores.append(abs(float(Y_cal_sel[i, s, 0])
+                                         - sel_model.predict(X_cal_sel[i, s, :])))
             predictor._scores  = np.array(cal_scores, dtype=float)
             predictor._weights = np.ones(len(cal_scores), dtype=float)
             predictor._q       = None
@@ -246,23 +264,28 @@ def _select_gamma(Y_train, X_train, cov_names, base_alpha, t_max, gamma_grid, se
             alpha_next = alpha_series.copy()
             step_cov   = []
             for i in range(n_eval):
-                y_true  = float(Y_eval[i, t, 0])
-                y_pred  = sel_model.predict(X_eval[i, t, :])
-                a       = float(np.clip(alpha_used[i], 1e-6, 1 - 1e-6))
-                q       = predictor._weighted_quantile(
+                y_true = float(Y_eval[i, t, 0])
+                y_pred = sel_model.predict(X_eval[i, t, :])
+                a      = float(np.clip(alpha_used[i], 1e-6, 1 - 1e-6))
+                q      = predictor._weighted_quantile(
                     predictor._scores, predictor._weights, 1.0 - a)
                 covered = int(y_pred - q <= y_true <= y_pred + q)
                 step_cov.append(covered)
-                alpha_next[i] = alpha_used[i] + gamma * (base_alpha - (0 if covered else 1))
+                err = 0 if covered else 1
+                alpha_next[i] = alpha_used[i] + gamma * (base_alpha - err)
             alpha_series = np.clip(alpha_next, 1e-6, 1.0 - 1e-6)
             cov_hist.append(float(np.mean(step_cov)) if step_cov else float('nan'))
-        tail = cov_hist[start_eval:]
-        scores[gamma] = float(np.mean(tail)) if tail else float('nan')
+        tail   = cov_hist[start_eval:]
+        metric = float(np.mean(tail)) if tail else float('nan')
+        scores[gamma] = metric
     best_gamma = float(gamma_grid[0])
     best_obj   = float('inf')
     for gamma, metric in scores.items():
-        if np.isfinite(metric) and abs(metric - target) < best_obj:
-            best_obj   = abs(metric - target)
+        if not np.isfinite(metric):
+            continue
+        obj = abs(metric - target)
+        if obj < best_obj:
+            best_obj   = obj
             best_gamma = float(gamma)
     return best_gamma, scores
 
@@ -271,7 +294,7 @@ def _select_gamma(Y_train, X_train, cov_names, base_alpha, t_max, gamma_grid, se
 # Main experiment
 # =============================================================================
 def run_finance_experiment(result, test_sector, cal_frac=0.5, alpha=0.1, seed=42,
-                           gamma_grid=None, with_shift=False):
+                           gamma_grid=None, with_shift=False, window=DEFAULT_WINDOW):
     if gamma_grid is None:
         gamma_grid = GAMMA_GRID
 
@@ -284,9 +307,6 @@ def run_finance_experiment(result, test_sector, cal_frac=0.5, alpha=0.1, seed=42
 
     n_series, L, n_cov = X.shape
     T = L - 1
-
-    feat_names = ["Y_mean(w30)", "Y_std(w30)", "Y_ar1(w30)"] + \
-                 [f"X_mean_{c}" for c in cov_names]
 
     test_mask = np.array([m["sector"].lower() == test_sector.lower() for m in meta])
     n_test    = int(test_mask.sum())
@@ -329,18 +349,24 @@ def run_finance_experiment(result, test_sector, cal_frac=0.5, alpha=0.1, seed=42
     print(f"  Gamma grid      : {gamma_grid}")
     print(f"  With shift      : {with_shift}")
     if with_shift:
-        print(f"  Y featurizer    : mean/std/ar1 over rolling window={Y_WINDOW} steps")
-        print(f"  X featurizer    : mean over full prefix")
-        print(f"  Feature names   : {feat_names}")
+        print(f"  Window          : {window} steps  "
+              f"(raw Y + X, feat dim = {window * (1 + n_cov)})")
     print()
 
     predictor    = AdaptedCAFHT(alpha=alpha)
     linear_model = LinearCovariateModel(cov_names)
 
     if with_shift:
-        predictor._featurize_prefixes = types.MethodType(
-            _featurize_YX_summaries, predictor
-        )
+        # ── Monkey-patch windowed X+Y featurizer onto this instance ──────────
+        # Replaces algorithm.py's default (last-Y-only) featurizer.
+        # The featurizer now receives prefixes of shape (n, t+1, 1+n_cov)
+        # where channel 0 is Y and channels 1..n_cov are the X covariates.
+        # It extracts the last `window` time steps and flattens to a vector.
+        featurize_fn = _make_windowed_featurizer(window, n_cov)
+        predictor._featurize_prefixes = types.MethodType(featurize_fn, predictor)
+        print(f"  Featurizer      : windowed raw Y+X  "
+              f"(window={window}, feat_dim={window*(1+n_cov)})")
+        print()
 
     alpha_t   = np.full(n_test, alpha, dtype=float)
     gamma_opt = float(gamma_grid[0])
@@ -390,8 +416,12 @@ def run_finance_experiment(result, test_sector, cal_frac=0.5, alpha=0.1, seed=42
 
         # ── prediction loop ───────────────────────────────────────────────────
         if with_shift and t >= 1:
-            train_Y_pre = Y_train[:, :t+1, :]
-            train_X_pre = X_train[:, :t+1, :]
+            # Build combined Y+X prefixes for train, test, cal.
+            # Shape after concat: (n, t+1, 1+n_cov)
+            # The featurizer extracts the last `window` steps of this combined
+            # array so the classifier sees recent Y returns AND recent covariates.
+            train_Y_pre = Y_train[:, :t+1, :]       # (n_train, t+1, 1)
+            train_X_pre = X_train[:, :t+1, :]       # (n_train, t+1, n_cov)
 
             mid   = n_test // 2
             half1 = np.arange(0, mid)
@@ -404,9 +434,12 @@ def run_finance_experiment(result, test_sector, cal_frac=0.5, alpha=0.1, seed=42
 
             for pred_idx, ctx_idx in [(half1, half2), (half2, half1)]:
 
-                test_Y_pre = Y_test[ctx_idx, :t+1, :]
-                test_X_pre = X_test[ctx_idx, :t+1, :]
+                test_Y_pre = Y_test[ctx_idx, :t+1, :]   # (n_ctx, t+1, 1)
+                test_X_pre = X_test[ctx_idx, :t+1, :]   # (n_ctx, t+1, n_cov)
 
+                # Step 1: update classifier context.
+                # We pass Y and X separately; algorithm.py concatenates them
+                # before calling _featurize_prefixes.
                 predictor.update_weighting_context(
                     train_prefixes=train_Y_pre,
                     test_prefixes=test_Y_pre,
@@ -415,10 +448,12 @@ def run_finance_experiment(result, test_sector, cal_frac=0.5, alpha=0.1, seed=42
                     test_X_prefixes=test_X_pre,
                 )
 
-                cal_feat = predictor._featurize_prefixes(
-                    Y_cal[:, :t+1, :],
-                    X_cal[:, :t+1, :],
-                )
+                # Step 2: featurize cal prefixes (combined Y+X) and compute weights.
+                # Must be inside the loop — features change each swap.
+                cal_YX   = np.concatenate(
+                    [Y_cal[:, :t+1, :], X_cal[:, :t+1, :]], axis=-1
+                )  # (n_cal, t+1, 1+n_cov)
+                cal_feat = predictor._featurize_prefixes(cal_YX)
 
                 per_series_w = predictor._compute_density_ratio_weights(
                     trainX=predictor._train_feat_t,
@@ -426,10 +461,12 @@ def run_finance_experiment(result, test_sector, cal_frac=0.5, alpha=0.1, seed=42
                     evalX=cal_feat,
                 )
 
+                # ── diagnostics (swap 0 only, at key time steps) ─────────────
                 if pred_idx is half1 and (t == 1 or t % 10 == 0 or t == T - 1):
-                    _print_feature_diagnostic(predictor, cal_feat, t, feat_names)
+                    _print_feature_diagnostic(predictor, cal_feat, t, window, n_cov)
                     _print_classifier_diagnostic(predictor, cal_feat, t)
 
+                # Shape guards
                 n_steps = t + 2
                 assert len(per_series_w) == n_cal, (
                     f"per_series_w {len(per_series_w)} != n_cal {n_cal}")
@@ -466,6 +503,7 @@ def run_finance_experiment(result, test_sector, cal_frac=0.5, alpha=0.1, seed=42
             alpha_t = np.clip(alpha_next, 1e-6, 1.0 - 1e-6)
 
         else:
+            # Unweighted: with_shift=False, or t==0 (no prefix history yet)
             alpha_used = alpha_t.copy()
             alpha_next = alpha_t.copy()
             covered_t  = []
@@ -529,15 +567,14 @@ def run_finance_experiment(result, test_sector, cal_frac=0.5, alpha=0.1, seed=42
             "gamma_grid":  [float(g) for g in gamma_grid],
             "seed":        seed,
             "with_shift":  with_shift,
-            "Y_window":    Y_WINDOW,
+            "window":      window,
             "cov_names":   cov_names,
-            "feat_names":  feat_names,
         },
     }
 
 
 # =============================================================================
-# Plotting
+# Plotting (unchanged)
 # =============================================================================
 def plot_results(results, save_path=None):
     dates   = results["dates"]
@@ -632,6 +669,9 @@ def main():
     parser.add_argument("--seed",        type=int,   default=42)
     parser.add_argument("--gamma_grid",  type=float, nargs='+', default=GAMMA_GRID)
     parser.add_argument("--with_shift",  action="store_true", default=False)
+    parser.add_argument("--window",      type=int,   default=DEFAULT_WINDOW,
+                        help="Look-back window (time steps) for the LR classifier "
+                             "featurizer. Default: 5.")
     parser.add_argument("--save_plot",   default=None)
     parser.add_argument("--save_json",   default=None)
     args = parser.parse_args()
@@ -650,6 +690,7 @@ def main():
         seed=args.seed,
         gamma_grid=args.gamma_grid,
         with_shift=args.with_shift,
+        window=args.window,
     )
 
     if args.save_json:

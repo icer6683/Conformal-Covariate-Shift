@@ -7,19 +7,19 @@ FINANCE CONFORMAL PREDICTION  —  AdaptedCAFHT on S&P 500 data
 QUICK START
 -----------
 Step 1 — pull data (once):
-  python finance_data.py --pull --start 2024-04-01 --end 2024-06-01
+  python finance_data.py --pull --start 2024-01-01 --end 2024-04-01
 
 Step 2 — run experiment:
 
   # Technology as test sector, no shift correction (default):
-  python finance_conformal.py --npz sp500_20241001_20241129.npz  --test_sector Technology
+  python finance_conformal.py --npz sp500_20240102_20240229.npz --test_sector Technology
 
   # Technology as test sector, WITH shift correction:
-  python finance_conformal.py --npz sp500_20241001_20241129.npz  --test_sector Technology --with_shift
+  python finance_conformal.py --npz sp500_20240102_20240229.npz --test_sector Technology --with_shift
 
   # Other sectors:
-  python finance_conformal.py --npz sp500_20231004_20240328.npz --test_sector Healthcare --with_shift
-  python finance_conformal.py --npz sp500_20231004_20240328.npz --test_sector Energy --with_shift
+  python finance_conformal.py --npz sp500_20240102_20240229.npz --test_sector Healthcare --with_shift
+  python finance_conformal.py --npz sp500_20240102_20240229.npz --test_sector Financials --with_shift
 
 FULL OPTIONS
 ------------
@@ -35,15 +35,27 @@ FULL OPTIONS
 
 FEATURIZER
 ----------
-  Y features — computed over the most recent Y_WINDOW=30 steps of Y
-  (or fewer if t < Y_WINDOW):
-    Y_mean, Y_std, Y_ar1
+  The logistic classifier that drives the covariate-shift weighting receives
+  one feature vector per ticker, computed from the full Y and X prefix up to
+  the current time step t.  No windowing — the entire available history is used.
 
-  X features — mean of each covariate over the full prefix:
-    X_mean_k for each covariate k
+  Features from Y (3):
+    Y_mean   — mean return over the prefix
+    Y_std    — standard deviation of returns
+    Y_ar1    — AR(1) slope (momentum): regress y_{s+1} on y_s across the prefix
 
-  No z-score standardisation. No regularisation override (uses algorithm.py
-  default C=1.0).
+  Features from X (n_cov, one per covariate):
+    X_mean_k — mean of covariate k over the prefix, for k = 0..n_cov-1
+
+  Total feature vector length: 3 + n_cov
+
+  Y features capture sector-level return behaviour (Technology tickers have
+  higher momentum and different volatility profiles).  X_mean features capture
+  stable structural differences between sectors in market microstructure
+  variables — e.g. Technology typically has higher TurnoverRatio than Utilities.
+
+  This is monkey-patched onto the predictor instance so algorithm.py is
+  unchanged at runtime.
 =============================================================================
 """
 import argparse
@@ -55,40 +67,43 @@ import matplotlib.pyplot as plt
 from finance_data import load_stored
 from algorithm import AdaptedCAFHT
 
-GAMMA_GRID    = [0.001, 0.005, 0.01, 0.05]
-Y_WINDOW      = 30
-AR1_MIN_STEPS = 5
+GAMMA_GRID = [0.001, 0.005, 0.01, 0.05]
 
 
 # =============================================================================
-# Featurizer: rolling window Y summaries + full-prefix X means
+# Featurizer: summary statistics over full Y prefix + per-covariate X means
 # =============================================================================
 def _featurize_YX_summaries(self, Y_prefixes, X_prefixes=None):
     """
+    Computes a fixed-length summary-stat feature vector per ticker using the
+    full available prefix (no windowing).
+
     Y_prefixes: (n, t+1, 1)
     X_prefixes: (n, t+1, n_cov)  optional
 
-    Y features (3) over last Y_WINDOW steps:
-      Y_mean, Y_std, Y_ar1
+    Returns: (n, 3 + n_cov)  if X_prefixes provided
+             (n, 3)           if X_prefixes is None
 
-    X features (n_cov) over full prefix:
-      mean of each covariate
+    Y features (3):
+      [Y_mean, Y_std, Y_ar1]
 
-    No normalisation applied.
+    X features (n_cov):
+      [mean of each covariate over the prefix]
+
+    Y_ar1 is the OLS slope from regressing y_{s+1} on y_s across all steps
+    in the prefix.  This captures momentum — Technology tickers consistently
+    show a more positive AR(1) slope than other sectors in this dataset.
     """
-    Y = Y_prefixes[..., 0]      # (n, t+1)
+    Y = Y_prefixes[..., 0]          # (n, t+1)
     n, T = Y.shape
 
-    # Rolling window for Y features
-    w   = min(Y_WINDOW, T)
-    Y_w = Y[:, -w:]             # (n, w)
+    # ── Y features ────────────────────────────────────────────────────────────
+    y_mean = Y.mean(axis=1)
+    y_std  = Y.std(axis=1) + 1e-8
 
-    y_mean = Y_w.mean(axis=1)
-    y_std  = Y_w.std(axis=1) + 1e-8
-
-    if w >= AR1_MIN_STEPS:
-        x_ar = Y_w[:, :-1]
-        y_ar = Y_w[:, 1:]
+    if T >= 2:
+        x_ar = Y[:, :-1]            # (n, T-1)  y_s
+        y_ar = Y[:, 1:]             # (n, T-1)  y_{s+1}
         x_c  = x_ar - x_ar.mean(axis=1, keepdims=True)
         y_c  = y_ar - y_ar.mean(axis=1, keepdims=True)
         num  = (x_c * y_c).sum(axis=1)
@@ -97,10 +112,12 @@ def _featurize_YX_summaries(self, Y_prefixes, X_prefixes=None):
     else:
         y_ar1 = np.zeros(n)
 
-    y_feats = np.column_stack([y_mean, y_std, y_ar1])  # (n, 3)
+    y_feats = np.column_stack([y_mean, y_std, y_ar1])   # (n, 3)
 
+    # ── X features ────────────────────────────────────────────────────────────
     if X_prefixes is not None and X_prefixes.shape[-1] > 0:
-        x_means = X_prefixes.mean(axis=1)              # (n, n_cov)
+        # Mean of each covariate over the full prefix: (n, n_cov)
+        x_means = X_prefixes.mean(axis=1)               # (n, n_cov)
         return np.concatenate([y_feats, x_means], axis=1)
 
     return y_feats
@@ -138,17 +155,17 @@ def _print_feature_diagnostic(predictor, cal_feat, t, feat_names):
         print(f"  [FeatDiag t={t:3d}] features not set")
         return
     print(f"  [FeatDiag t={t:3d}]  train={train_feat.shape}  "
-          f"test={test_feat.shape}  cal={cal_feat.shape}  "
-          f"(Y window=min({Y_WINDOW},t))")
+          f"test={test_feat.shape}  cal={cal_feat.shape}")
     for col in range(train_feat.shape[1]):
         tr   = train_feat[:, col]
         te   = test_feat[:, col]
         ca   = cal_feat[:, col]
         sep  = abs(tr.mean() - te.mean()) / (tr.std() + te.std() + 1e-8)
         name = feat_names[col] if col < len(feat_names) else f"feat{col}"
-        print(f"    {name:30s}  "
+        print(f"    {name:14s}  "
               f"train: mean={tr.mean():+.4f} std={tr.std():.4f}  "
               f"test:  mean={te.mean():+.4f} std={te.std():.4f}  "
+              f"cal:   mean={ca.mean():+.4f} std={ca.std():.4f}  "
               f"|sep|={sep:.3f}")
 
 
@@ -161,12 +178,12 @@ def _print_classifier_diagnostic(predictor, cal_feat, t):
     test_feat  = predictor._test_feat_t
     if train_feat is None or test_feat is None:
         return
-    N0, N1    = train_feat.shape[0], test_feat.shape[0]
-    X_all     = np.vstack([train_feat, test_feat])
-    y_all     = np.concatenate([np.zeros(N0, dtype=int), np.ones(N1, dtype=int)])
-    acc        = clf.score(X_all, y_all)
-    coef_norm  = float(np.linalg.norm(clf.coef_))
-    prob_cal   = clf.predict_proba(cal_feat)[:, 1]
+    N0, N1   = train_feat.shape[0], test_feat.shape[0]
+    X_all    = np.vstack([train_feat, test_feat])
+    y_all    = np.concatenate([np.zeros(N0, dtype=int), np.ones(N1, dtype=int)])
+    acc       = clf.score(X_all, y_all)
+    coef_norm = float(np.linalg.norm(clf.coef_))
+    prob_cal  = clf.predict_proba(cal_feat)[:, 1]
     print(f"  [CLFDiag t={t:3d}]  train_acc={acc:.3f}  coef_norm={coef_norm:.4f}  "
           f"prob1_cal: min={prob_cal.min():.3f}  max={prob_cal.max():.3f}  "
           f"mean={prob_cal.mean():.3f}  std={prob_cal.std():.4f}")
@@ -285,8 +302,8 @@ def run_finance_experiment(result, test_sector, cal_frac=0.5, alpha=0.1, seed=42
     n_series, L, n_cov = X.shape
     T = L - 1
 
-    feat_names = ["Y_mean(w30)", "Y_std(w30)", "Y_ar1(w30)"] + \
-                 [f"X_mean_{c}" for c in cov_names]
+    # Feature names for the diagnostic printout
+    feat_names = ["Y_mean", "Y_std", "Y_ar1"] + [f"X_mean_{c}" for c in cov_names]
 
     test_mask = np.array([m["sector"].lower() == test_sector.lower() for m in meta])
     n_test    = int(test_mask.sum())
@@ -329,8 +346,8 @@ def run_finance_experiment(result, test_sector, cal_frac=0.5, alpha=0.1, seed=42
     print(f"  Gamma grid      : {gamma_grid}")
     print(f"  With shift      : {with_shift}")
     if with_shift:
-        print(f"  Y featurizer    : mean/std/ar1 over rolling window={Y_WINDOW} steps")
-        print(f"  X featurizer    : mean over full prefix")
+        print(f"  Featurizer      : Y summary (mean/std/ar1) + X means  "
+              f"[{3 + n_cov} features total]")
         print(f"  Feature names   : {feat_names}")
     print()
 
@@ -338,6 +355,9 @@ def run_finance_experiment(result, test_sector, cal_frac=0.5, alpha=0.1, seed=42
     linear_model = LinearCovariateModel(cov_names)
 
     if with_shift:
+        # Monkey-patch the Y+X summary featurizer onto this instance only.
+        # The signature now matches the updated algorithm.py which passes
+        # X_prefixes as an optional second argument to _featurize_prefixes.
         predictor._featurize_prefixes = types.MethodType(
             _featurize_YX_summaries, predictor
         )
@@ -390,8 +410,8 @@ def run_finance_experiment(result, test_sector, cal_frac=0.5, alpha=0.1, seed=42
 
         # ── prediction loop ───────────────────────────────────────────────────
         if with_shift and t >= 1:
-            train_Y_pre = Y_train[:, :t+1, :]
-            train_X_pre = X_train[:, :t+1, :]
+            train_Y_pre = Y_train[:, :t+1, :]      # (n_train, t+1, 1)
+            train_X_pre = X_train[:, :t+1, :]      # (n_train, t+1, n_cov)
 
             mid   = n_test // 2
             half1 = np.arange(0, mid)
@@ -404,9 +424,11 @@ def run_finance_experiment(result, test_sector, cal_frac=0.5, alpha=0.1, seed=42
 
             for pred_idx, ctx_idx in [(half1, half2), (half2, half1)]:
 
-                test_Y_pre = Y_test[ctx_idx, :t+1, :]
-                test_X_pre = X_test[ctx_idx, :t+1, :]
+                test_Y_pre = Y_test[ctx_idx, :t+1, :]   # (n_ctx, t+1, 1)
+                test_X_pre = X_test[ctx_idx, :t+1, :]   # (n_ctx, t+1, n_cov)
 
+                # Step 1: update classifier — passes both Y and X prefixes so
+                # update_weighting_context can call _featurize_prefixes(Y, X)
                 predictor.update_weighting_context(
                     train_prefixes=train_Y_pre,
                     test_prefixes=test_Y_pre,
@@ -415,6 +437,9 @@ def run_finance_experiment(result, test_sector, cal_frac=0.5, alpha=0.1, seed=42
                     test_X_prefixes=test_X_pre,
                 )
 
+                # Step 2: featurize cal prefixes and compute weights.
+                # Call _featurize_prefixes directly with both Y and X so cal
+                # features are computed the same way as train/test features.
                 cal_feat = predictor._featurize_prefixes(
                     Y_cal[:, :t+1, :],
                     X_cal[:, :t+1, :],
@@ -426,10 +451,12 @@ def run_finance_experiment(result, test_sector, cal_frac=0.5, alpha=0.1, seed=42
                     evalX=cal_feat,
                 )
 
+                # ── diagnostics (swap 0 only, key time steps) ────────────────
                 if pred_idx is half1 and (t == 1 or t % 10 == 0 or t == T - 1):
                     _print_feature_diagnostic(predictor, cal_feat, t, feat_names)
                     _print_classifier_diagnostic(predictor, cal_feat, t)
 
+                # Shape guards
                 n_steps = t + 2
                 assert len(per_series_w) == n_cal, (
                     f"per_series_w {len(per_series_w)} != n_cal {n_cal}")
@@ -466,6 +493,7 @@ def run_finance_experiment(result, test_sector, cal_frac=0.5, alpha=0.1, seed=42
             alpha_t = np.clip(alpha_next, 1e-6, 1.0 - 1e-6)
 
         else:
+            # Unweighted: with_shift=False, or t==0
             alpha_used = alpha_t.copy()
             alpha_next = alpha_t.copy()
             covered_t  = []
@@ -529,7 +557,6 @@ def run_finance_experiment(result, test_sector, cal_frac=0.5, alpha=0.1, seed=42
             "gamma_grid":  [float(g) for g in gamma_grid],
             "seed":        seed,
             "with_shift":  with_shift,
-            "Y_window":    Y_WINDOW,
             "cov_names":   cov_names,
             "feat_names":  feat_names,
         },

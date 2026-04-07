@@ -7,15 +7,15 @@ FINANCE CONFORMAL PREDICTION  —  AdaptedCAFHT on S&P 500 data
 QUICK START
 -----------
 Step 1 — pull data (once):
-  python finance_data.py --pull --start 2024-04-01 --end 2024-06-01
+  python finance_data.py --pull --start 2024-01-01 --end 2024-04-01
 
 Step 2 — run experiment:
 
   # Technology as test sector, no shift correction (default):
-  python finance_conformal.py --npz sp500_20241001_20241129.npz  --test_sector Technology
+  python finance_conformal.py --npz sp500_20231004_20240328.npz --test_sector Technology
 
   # Technology as test sector, WITH shift correction:
-  python finance_conformal.py --npz sp500_20241001_20241129.npz  --test_sector Technology --with_shift
+  python finance_conformal.py --npz sp500_20231004_20240328.npz --test_sector Technology --with_shift
 
   # Other sectors:
   python finance_conformal.py --npz sp500_20231004_20240328.npz --test_sector Healthcare --with_shift

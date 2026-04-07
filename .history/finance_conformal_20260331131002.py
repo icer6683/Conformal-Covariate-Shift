@@ -7,19 +7,19 @@ FINANCE CONFORMAL PREDICTION  —  AdaptedCAFHT on S&P 500 data
 QUICK START
 -----------
 Step 1 — pull data (once):
-  python finance_data.py --pull --start 2024-04-01 --end 2024-06-01
+  python finance_data.py --pull --start 2024-01-01 --end 2024-04-01
 
 Step 2 — run experiment:
 
   # Technology as test sector, no shift correction (default):
-  python finance_conformal.py --npz sp500_20241001_20241129.npz  --test_sector Technology
+  python finance_conformal.py --npz sp500_20240102_20240229.npz --test_sector Technology
 
   # Technology as test sector, WITH shift correction:
-  python finance_conformal.py --npz sp500_20241001_20241129.npz  --test_sector Technology --with_shift
+  python finance_conformal.py --npz sp500_20240102_20240229.npz --test_sector Technology --with_shift
 
   # Other sectors:
-  python finance_conformal.py --npz sp500_20231004_20240328.npz --test_sector Healthcare --with_shift
-  python finance_conformal.py --npz sp500_20231004_20240328.npz --test_sector Energy --with_shift
+  python finance_conformal.py --npz sp500_20240102_20240229.npz --test_sector Healthcare --with_shift
+  python finance_conformal.py --npz sp500_20240102_20240229.npz --test_sector Financials --with_shift
 
 FULL OPTIONS
 ------------
@@ -35,15 +35,28 @@ FULL OPTIONS
 
 FEATURIZER
 ----------
+  The logistic classifier receives one feature vector per ticker.
+
   Y features — computed over the most recent Y_WINDOW=30 steps of Y
-  (or fewer if t < Y_WINDOW):
-    Y_mean, Y_std, Y_ar1
+  (or fewer if t < Y_WINDOW, in which case all available steps are used):
+    Y_mean   mean return over the rolling window
+    Y_std    standard deviation of returns
+    Y_ar1    AR(1) slope (momentum) — only included when window >= 5 steps,
+             otherwise set to 0 to avoid noise from too-short prefixes
 
-  X features — mean of each covariate over the full prefix:
-    X_mean_k for each covariate k
+  X features — computed over the FULL prefix (not windowed):
+    X_mean_k  mean of covariate k over all available steps, for each k
+             X features use the full prefix because covariates like
+             TurnoverRatio reflect structural sector properties that
+             are better estimated over longer histories.
+             X_mean_Above52wLowReturn is excluded — it has near-zero
+             separation and high variance that swamps the classifier.
 
-  No z-score standardisation. No regularisation override (uses algorithm.py
-  default C=1.0).
+  Features are standardised (z-scored) before being passed to the logistic
+  classifier so that low-variance but informative features like
+  TurnoverRatio_lag1 are not dominated by high-variance ones.
+
+  Total feature vector length: 3 (Y) + n_cov - 1 (X, minus Above52wLow)
 =============================================================================
 """
 import argparse
@@ -55,33 +68,36 @@ import matplotlib.pyplot as plt
 from finance_data import load_stored
 from algorithm import AdaptedCAFHT
 
-GAMMA_GRID    = [0.001, 0.005, 0.01, 0.05]
-Y_WINDOW      = 30
-AR1_MIN_STEPS = 5
+GAMMA_GRID   = [0.001, 0.005, 0.01, 0.05]
+Y_WINDOW     = 30   # rolling window for Y features
+AR1_MIN_STEPS = 5   # minimum steps needed before including Y_ar1
 
 
 # =============================================================================
-# Featurizer: rolling window Y summaries + full-prefix X means
+# Featurizer
 # =============================================================================
 def _featurize_YX_summaries(self, Y_prefixes, X_prefixes=None):
     """
     Y_prefixes: (n, t+1, 1)
     X_prefixes: (n, t+1, n_cov)  optional
 
-    Y features (3) over last Y_WINDOW steps:
+    Y features (3) — computed over the most recent Y_WINDOW steps:
       Y_mean, Y_std, Y_ar1
 
-    X features (n_cov) over full prefix:
-      mean of each covariate
+    X features (n_cov - 1) — computed over the full prefix:
+      mean of each covariate EXCEPT Above52wLowReturn (index 1), which
+      is excluded due to near-zero separation and high variance.
 
-    No normalisation applied.
+    All features are z-scored before return so that the logistic
+    classifier treats each dimension on equal footing.
     """
     Y = Y_prefixes[..., 0]      # (n, t+1)
     n, T = Y.shape
 
-    # Rolling window for Y features
-    w   = min(Y_WINDOW, T)
-    Y_w = Y[:, -w:]             # (n, w)
+    # ── Y features: rolling window ────────────────────────────────────────────
+    # Use the last Y_WINDOW steps, or all steps if T < Y_WINDOW.
+    w    = min(Y_WINDOW, T)
+    Y_w  = Y[:, -w:]            # (n, w)
 
     y_mean = Y_w.mean(axis=1)
     y_std  = Y_w.std(axis=1) + 1e-8
@@ -97,13 +113,25 @@ def _featurize_YX_summaries(self, Y_prefixes, X_prefixes=None):
     else:
         y_ar1 = np.zeros(n)
 
-    y_feats = np.column_stack([y_mean, y_std, y_ar1])  # (n, 3)
+    y_feats = np.column_stack([y_mean, y_std, y_ar1])   # (n, 3)
 
+    # ── X features: full prefix, exclude Above52wLowReturn (index 1) ─────────
     if X_prefixes is not None and X_prefixes.shape[-1] > 0:
-        x_means = X_prefixes.mean(axis=1)              # (n, n_cov)
-        return np.concatenate([y_feats, x_means], axis=1)
+        # Drop column index 1 (Above52wLowReturn) — near-zero |sep| throughout
+        # and high variance that swamps the logistic regression coefficients.
+        keep_cols = [c for c in range(X_prefixes.shape[-1]) if c != 1]
+        X_keep    = X_prefixes[:, :, keep_cols]         # (n, T, n_cov-1)
+        x_means   = X_keep.mean(axis=1)                 # (n, n_cov-1)
+        feats     = np.concatenate([y_feats, x_means], axis=1)
+    else:
+        feats = y_feats
 
-    return y_feats
+    # ── z-score normalisation ─────────────────────────────────────────────────
+    # Standardise across the n tickers so every feature has mean=0, std=1.
+    # This prevents high-variance features from dominating the LR gradient.
+    mu  = feats.mean(axis=0, keepdims=True)
+    sig = feats.std(axis=0, keepdims=True) + 1e-8
+    return (feats - mu) / sig
 
 
 # =============================================================================
@@ -147,8 +175,8 @@ def _print_feature_diagnostic(predictor, cal_feat, t, feat_names):
         sep  = abs(tr.mean() - te.mean()) / (tr.std() + te.std() + 1e-8)
         name = feat_names[col] if col < len(feat_names) else f"feat{col}"
         print(f"    {name:30s}  "
-              f"train: mean={tr.mean():+.4f} std={tr.std():.4f}  "
-              f"test:  mean={te.mean():+.4f} std={te.std():.4f}  "
+              f"train: mean={tr.mean():+.3f} std={tr.std():.3f}  "
+              f"test:  mean={te.mean():+.3f} std={te.std():.3f}  "
               f"|sep|={sep:.3f}")
 
 
@@ -161,12 +189,12 @@ def _print_classifier_diagnostic(predictor, cal_feat, t):
     test_feat  = predictor._test_feat_t
     if train_feat is None or test_feat is None:
         return
-    N0, N1    = train_feat.shape[0], test_feat.shape[0]
-    X_all     = np.vstack([train_feat, test_feat])
-    y_all     = np.concatenate([np.zeros(N0, dtype=int), np.ones(N1, dtype=int)])
-    acc        = clf.score(X_all, y_all)
-    coef_norm  = float(np.linalg.norm(clf.coef_))
-    prob_cal   = clf.predict_proba(cal_feat)[:, 1]
+    N0, N1   = train_feat.shape[0], test_feat.shape[0]
+    X_all    = np.vstack([train_feat, test_feat])
+    y_all    = np.concatenate([np.zeros(N0, dtype=int), np.ones(N1, dtype=int)])
+    acc       = clf.score(X_all, y_all)
+    coef_norm = float(np.linalg.norm(clf.coef_))
+    prob_cal  = clf.predict_proba(cal_feat)[:, 1]
     print(f"  [CLFDiag t={t:3d}]  train_acc={acc:.3f}  coef_norm={coef_norm:.4f}  "
           f"prob1_cal: min={prob_cal.min():.3f}  max={prob_cal.max():.3f}  "
           f"mean={prob_cal.mean():.3f}  std={prob_cal.std():.4f}")
@@ -285,8 +313,10 @@ def run_finance_experiment(result, test_sector, cal_frac=0.5, alpha=0.1, seed=42
     n_series, L, n_cov = X.shape
     T = L - 1
 
-    feat_names = ["Y_mean(w30)", "Y_std(w30)", "Y_ar1(w30)"] + \
-                 [f"X_mean_{c}" for c in cov_names]
+    # Feature names for diagnostics.
+    # X col 1 (Above52wLowReturn) is excluded from the featurizer.
+    x_feat_names = [f"X_mean_{cov_names[c]}" for c in range(n_cov) if c != 1]
+    feat_names   = ["Y_mean(w30)", "Y_std(w30)", "Y_ar1(w30)"] + x_feat_names
 
     test_mask = np.array([m["sector"].lower() == test_sector.lower() for m in meta])
     n_test    = int(test_mask.sum())
@@ -330,11 +360,13 @@ def run_finance_experiment(result, test_sector, cal_frac=0.5, alpha=0.1, seed=42
     print(f"  With shift      : {with_shift}")
     if with_shift:
         print(f"  Y featurizer    : mean/std/ar1 over rolling window={Y_WINDOW} steps")
-        print(f"  X featurizer    : mean over full prefix")
+        print(f"  X featurizer    : mean over full prefix  "
+              f"(Above52wLowReturn excluded)")
+        print(f"  Standardisation : z-score per feature across tickers")
         print(f"  Feature names   : {feat_names}")
     print()
 
-    predictor    = AdaptedCAFHT(alpha=alpha)
+    predictor    = AdaptedCAFHT(alpha=alpha, logistic_kwargs={"C": 0.1})
     linear_model = LinearCovariateModel(cov_names)
 
     if with_shift:
@@ -426,10 +458,12 @@ def run_finance_experiment(result, test_sector, cal_frac=0.5, alpha=0.1, seed=42
                     evalX=cal_feat,
                 )
 
+                # ── diagnostics (swap 0, key time steps) ─────────────────────
                 if pred_idx is half1 and (t == 1 or t % 10 == 0 or t == T - 1):
                     _print_feature_diagnostic(predictor, cal_feat, t, feat_names)
                     _print_classifier_diagnostic(predictor, cal_feat, t)
 
+                # Shape guards
                 n_steps = t + 2
                 assert len(per_series_w) == n_cal, (
                     f"per_series_w {len(per_series_w)} != n_cal {n_cal}")
