@@ -1,30 +1,34 @@
 #!/usr/bin/env python3
 """
 =============================================================================
-MEDICAL CONFORMAL PREDICTION  —  AdaptedCAFHT on sepsis ICU data
+MEDICAL CONFORMAL PREDICTION  ---  AdaptedCAFHT on sepsis ICU data
 =============================================================================
 
 QUICK START
 -----------
-Step 1 — make sure ``sepsis_experiment_data.pkl`` is in the working directory
-  (the pickle is produced by the upstream MIMIC-III extraction pipeline and
-  contains pre-filtered patients; see medical_data.py for format details).
+Step 1 --- make sure ``sepsis_experiment_data_nacl_target.pkl`` is in the
+  working directory (the pickle is produced by the upstream MIMIC-III
+  extraction pipeline; see medical_data.md for format details).
 
-Step 2 — run experiment:
+Step 2 --- run experiment:
 
   # Default run (no shift correction):
-  python medical_conformal.py --pkl sepsis_experiment_data.pkl
+  python medical_conformal.py --pkl sepsis_experiment_data_nacl_target.pkl
 
   # WITH likelihood-ratio shift correction:
-  python medical_conformal.py --pkl sepsis_experiment_data.pkl --with_shift
+  python medical_conformal.py --pkl sepsis_experiment_data_nacl_target.pkl --with_shift
 
   # Custom alpha, cal fraction, and seed:
-  python medical_conformal.py --pkl sepsis_experiment_data.pkl --with_shift \
+  python medical_conformal.py --pkl sepsis_experiment_data_nacl_target.pkl --with_shift \
       --alpha 0.1 --cal_frac 0.5 --seed 42
+
+  # Quick run with subsampled data (500 TrainCal, 300 Test):
+  python medical_conformal.py --pkl sepsis_experiment_data_nacl_target.pkl --with_shift \
+      --n_traincal 500 --n_test 300
 
 FULL OPTIONS
 ------------
-  --pkl          Path to sepsis_experiment_data.pkl (required)
+  --pkl          Path to sepsis_experiment_data_nacl_target.pkl (required)
   --with_shift   Toggle ON likelihood-ratio covariate-shift weighting.
                  Uses cross-split update_weighting_context() to reweight
                  calibration scores for the Norepinephrine distribution shift.
@@ -32,6 +36,10 @@ FULL OPTIONS
   --alpha        Miscoverage level. Default: 0.1  (targets 90% coverage)
   --cal_frac     Fraction of TrainCal patients used for calibration.
                  Default: 0.5  (remaining used for training)
+  --n_traincal   Number of TrainCal patients to randomly subsample.
+                 Default: None (use all available TrainCal patients)
+  --n_test       Number of Test patients to randomly subsample.
+                 Default: None (use all available Test patients)
   --gamma_grid   Space-separated ACI step-size candidates.
                  Default: [0.000001, 0.000005, 0.00001, 0.00005, 0.0001, 0.0005, 0.001, 0.005, 0.01]
   --seed         Random seed. Default: 42
@@ -47,24 +55,27 @@ HOW IT WORKS
   --cal_frac).
 
   Target variable (Y):
-    Heart Rate at each hour (24 hourly values per patient).
+    NaCl 0.9% dosage at each hour (24 hourly values per patient).
 
-  Covariates (X):
-    Six other clinical trajectories, EXCLUDING Norepinephrine (which is
-    identically zero for all TrainCal patients, so its coefficient is
-    unidentifiable from training data):
+  Dynamic covariates (X):
+    Three physiologic CHART trajectories:
+      - Heart Rate
       - Respiratory Rate
       - O2 saturation pulseoxymetry
-      - Non Invasive Blood Pressure systolic
-      - Non Invasive Blood Pressure diastolic
-      - Non Invasive Blood Pressure mean
-      - NaCl 0.9%
+
+  Static covariates (S):
+    Three patient-level variables included in both the prediction model
+    and the likelihood-ratio classifier:
+      - Age (numeric, standardized)
+      - gender (binary: M->1, F->0)
+      - ethnicity (grouped into 5 major categories, one-hot encoded
+        with 4 dummy columns; WHITE is the reference category)
 
   Loop structure is identical to finance_conformal.py and test_conformal.py:
       for t in range(T):                          # T = 23 (hours 0..22)
           fit   linear model on train[:, :t+2, :]
           build calibration scores on cal[:, :t+2, :]
-          (gamma selection every 10 steps)
+          (gamma selection every 5 steps)
           if with_shift and t >= 1:
               cross-split test into two halves
               for each (predict_half, context_half):
@@ -77,92 +88,164 @@ HOW IT WORKS
 
   Prediction model:
     Cross-sectional linear regression at each hour:
-      HR_t ≈ β₀ + β₁·RespRate_t + β₂·O2Sat_t + β₃·BPsys_t
-                 + β₄·BPdia_t + β₅·BPmean_t + β₆·NaCl_t
+      NaCl_t ~ beta_0 + beta_1*HR_t + beta_2*RR_t + beta_3*O2Sat_t
+             + beta_4*Age + beta_5*gender_M
+             + beta_6*eth_BLACK + beta_7*eth_HISPANIC + beta_8*eth_ASIAN
+             + beta_9*eth_OTHER
     fitted by OLS across all (patient, timestep) pairs in the training prefix.
 
   Conformity score:
-    |HR_true - HR_pred|   (absolute residual)
+    |NaCl_true - NaCl_pred|   (absolute residual)
 
   Likelihood-ratio weighting (--with_shift):
     A logistic classifier distinguishes Train from Test featurized prefixes.
     The monkey-patched featurizer computes summary statistics over BOTH the
-    Heart Rate (Y) prefix AND the 6 covariate (X) prefixes:
-      Per variable: [mean, std, min, max, last]
-      Total: 7 variables x 5 stats = 35 features per patient
+    NaCl 0.9% (Y) prefix AND the 3 dynamic covariate (X) prefixes, PLUS
+    the static covariates (Age, gender, ethnicity dummies):
+      Per dynamic variable: [mean, std, min, max, last]  -> 4 vars x 5 = 20
+      Static features: Age + gender_M + 4 ethnicity dummies = 6
+      Total: 20 + 6 = 26 features per patient
     The classifier's predicted probabilities give density-ratio weights
     for each calibration series.
 
     The covariate shift in this dataset is driven by Norepinephrine usage,
-    which correlates strongly with lower blood pressure and different fluid
-    management (NaCl).  Using only Heart Rate for the classifier yields
-    ~55% accuracy (near-random); adding covariates raises it to ~76%.
+    which correlates with different fluid management patterns and
+    physiologic states between TrainCal and Test populations.
 
 FEATURE OVERRIDE
 ----------------
   algorithm.py's default _featurize_prefixes uses only the last value as
   the single classifier feature.  This file monkey-patches a richer
-  featurizer that uses both Y and X data.
+  featurizer that uses both Y and X data plus static covariates.
 
   Because algorithm.py's _featurize_prefixes signature only accepts Y
-  prefixes (n, t+1, 1), we store auxiliary X arrays on the predictor
-  instance (predictor._X_ctx) and look them up inside the featurizer.
-  The caller sets predictor._X_ctx to the matching X prefix array before
-  each call to _featurize_prefixes or update_weighting_context.
+  prefixes (n, t+1, 1), we store auxiliary arrays on the predictor
+  instance (predictor._X_ctx, predictor._S_ctx) and look them up inside
+  the featurizer.  The caller sets these before each featurize call.
 
-    features per patient = 5 stats x 7 variables = 35 features
-    stats   : [mean, std, min, max, last]
-    variables: Heart Rate + 6 covariates
+    features per patient = 5 stats x 4 dynamic vars + 6 static = 26 features
+    stats    : [mean, std, min, max, last]
+    dynamic  : NaCl 0.9% + 3 covariates
+    static   : Age, gender_M, eth_BLACK, eth_HISPANIC, eth_ASIAN, eth_OTHER
 =============================================================================
 """
 import argparse
 import json
+import pickle
 import types
 from pathlib import Path
 
 import numpy as np
 import matplotlib.pyplot as plt
 
-from medical_data import load_data
 from algorithm import AdaptedCAFHT
 
 
-# ── Constants ────────────────────────────────────────────────────────────────
+# -- Constants ----------------------------------------------------------------
 
-TARGET_VAR = "Heart Rate"
+TARGET_VAR = "NaCl 0.9% (target)"
 
 COVARIATE_VARS = [
+    "Heart Rate",
     "Respiratory Rate",
     "O2 saturation pulseoxymetry",
-    "Non Invasive Blood Pressure systolic",
-    "Non Invasive Blood Pressure diastolic",
-    "Non Invasive Blood Pressure mean",
-    "NaCl 0.9%",
 ]
+
+STATIC_VARS = ["Age", "gender", "ethnicity"]
+
+# Ethnicity grouping: map raw MIMIC ethnicity strings to 5 major categories
+ETHNICITY_MAP = {
+    "WHITE":                                        "WHITE",
+    "WHITE - RUSSIAN":                              "WHITE",
+    "WHITE - BRAZILIAN":                            "WHITE",
+    "WHITE - EASTERN EUROPEAN":                     "WHITE",
+    "WHITE - OTHER EUROPEAN":                       "WHITE",
+    "BLACK/AFRICAN AMERICAN":                       "BLACK",
+    "BLACK/AFRICAN":                                "BLACK",
+    "BLACK/CAPE VERDEAN":                           "BLACK",
+    "BLACK/HAITIAN":                                "BLACK",
+    "HISPANIC OR LATINO":                           "HISPANIC",
+    "HISPANIC/LATINO - PUERTO RICAN":               "HISPANIC",
+    "HISPANIC/LATINO - DOMINICAN":                  "HISPANIC",
+    "HISPANIC/LATINO - MEXICAN":                    "HISPANIC",
+    "HISPANIC/LATINO - GUATEMALAN":                 "HISPANIC",
+    "HISPANIC/LATINO - CUBAN":                      "HISPANIC",
+    "HISPANIC/LATINO - SALVADORAN":                 "HISPANIC",
+    "HISPANIC/LATINO - CENTRAL AMERICAN (OTHER)":   "HISPANIC",
+    "HISPANIC/LATINO - COLOMBIAN":                  "HISPANIC",
+    "HISPANIC/LATINO - HONDURAN":                   "HISPANIC",
+    "ASIAN":                                        "ASIAN",
+    "ASIAN - CHINESE":                              "ASIAN",
+    "ASIAN - ASIAN INDIAN":                         "ASIAN",
+    "ASIAN - VIETNAMESE":                            "ASIAN",
+    "ASIAN - FILIPINO":                             "ASIAN",
+    "ASIAN - CAMBODIAN":                            "ASIAN",
+    "ASIAN - KOREAN":                               "ASIAN",
+    "ASIAN - JAPANESE":                             "ASIAN",
+    "ASIAN - THAI":                                 "ASIAN",
+    "ASIAN - OTHER":                                "ASIAN",
+}
+# Everything not in the map goes to OTHER
+ETHNICITY_DUMMIES = ["BLACK", "HISPANIC", "ASIAN", "OTHER"]  # WHITE = reference
 
 GAMMA_GRID = [0.000001, 0.000005, 0.00001, 0.00005, 0.0001, 0.0005, 0.001, 0.005, 0.01]
 
+# Number of static features after encoding
+N_STATIC = 1 + 1 + len(ETHNICITY_DUMMIES)  # Age + gender_M + 4 ethnicity dummies = 6
+
 
 # =============================================================================
-# Data conversion: nested dict-of-DataFrames → arrays
+# Data loading: pickle -> dict
+# =============================================================================
+
+def load_data(pkl_path):
+    """Load the sepsis experiment pickle and return the raw dict."""
+    with open(pkl_path, "rb") as f:
+        return pickle.load(f)
+
+
+# =============================================================================
+# Ethnicity encoding helper
+# =============================================================================
+
+def _encode_ethnicity(raw_ethnicity):
+    """
+    Map a raw ethnicity string to a 4-element one-hot vector.
+
+    The 5 groups are WHITE (reference), BLACK, HISPANIC, ASIAN, OTHER.
+    Returns a length-4 array (dummies for BLACK, HISPANIC, ASIAN, OTHER).
+    WHITE maps to all zeros (reference category).
+    """
+    group = ETHNICITY_MAP.get(raw_ethnicity, "OTHER")
+    vec = np.zeros(len(ETHNICITY_DUMMIES), dtype=np.float64)
+    if group != "WHITE":
+        idx = ETHNICITY_DUMMIES.index(group)
+        vec[idx] = 1.0
+    return vec
+
+
+# =============================================================================
+# Data conversion: nested dict-of-DataFrames -> arrays
 # =============================================================================
 
 def _convert_to_arrays(patient_trajectory_list):
     """
-    Convert the list-of-dicts representation into (Y, X) arrays.
+    Convert the list-of-dicts representation into (Y, X, S) arrays.
 
     Parameters
     ----------
-    patient_trajectory_list : list[dict[str, DataFrame]]
+    patient_trajectory_list : list[dict]
         Each dict maps trajectory names to DataFrames with columns
-        (hour, value).
+        (hour, value), plus scalar static variables.
 
     Returns
     -------
     Y : ndarray of shape (n_patients, 24, 1)
-        Heart Rate trajectories.
+        NaCl 0.9% trajectories (target).
     X : ndarray of shape (n_patients, 24, n_cov)
-        Covariate trajectories (6 variables), in COVARIATE_VARS order.
+        Dynamic covariate trajectories (3 variables), in COVARIATE_VARS order.
+    S : ndarray of shape (n_patients, N_STATIC)
+        Static covariates: [Age, gender_M, eth_BLACK, eth_HISPANIC, eth_ASIAN, eth_OTHER]
     """
     n = len(patient_trajectory_list)
     L = 24
@@ -170,31 +253,38 @@ def _convert_to_arrays(patient_trajectory_list):
 
     Y = np.zeros((n, L, 1), dtype=np.float64)
     X = np.zeros((n, L, n_cov), dtype=np.float64)
+    S = np.zeros((n, N_STATIC), dtype=np.float64)
 
     for i, patient_dict in enumerate(patient_trajectory_list):
-        # Heart Rate → Y
-        hr_df = patient_dict[TARGET_VAR]
-        Y[i, :, 0] = hr_df["value"].to_numpy(dtype=np.float64)
+        # NaCl 0.9% target -> Y
+        target_df = patient_dict[TARGET_VAR]
+        Y[i, :, 0] = target_df["value"].to_numpy(dtype=np.float64)
 
-        # Covariates → X
+        # Dynamic covariates -> X
         for j, var_name in enumerate(COVARIATE_VARS):
             cov_df = patient_dict[var_name]
             X[i, :, j] = cov_df["value"].to_numpy(dtype=np.float64)
 
-    return Y, X
+        # Static covariates -> S
+        S[i, 0] = float(patient_dict["Age"])
+        S[i, 1] = 1.0 if patient_dict["gender"] == "M" else 0.0
+        S[i, 2:] = _encode_ethnicity(patient_dict["ethnicity"])
+
+    return Y, X, S
 
 
 # =============================================================================
-# Richer featurizer — monkey-patched onto the predictor instance.
+# Richer featurizer --- monkey-patched onto the predictor instance.
 # =============================================================================
 
+# Compute 5 summary statistics per dynamic variable
 def _summarize_series(series_2d):
     """
     Compute 5 summary statistics per variable.
 
     Parameters
     ----------
-    series_2d : (n, T) array — one variable's prefix across n patients.
+    series_2d : (n, T) array --- one variable's prefix across n patients.
 
     Returns
     -------
@@ -209,38 +299,46 @@ def _summarize_series(series_2d):
     ])
 
 
+# Monkey-patched featurizer combining dynamic summaries and static covariates
 def _richer_featurize_prefixes(self, prefixes):
     """
-    Build a rich feature vector from both Y (Heart Rate) and X (covariates).
+    Build a rich feature vector from Y (NaCl), X (dynamic covariates), and
+    S (static covariates: Age, gender, ethnicity dummies).
 
-    prefixes : (n, t+1, 1) — Heart Rate prefix (passed by algorithm.py)
+    prefixes : (n, t+1, 1) --- NaCl 0.9% prefix (passed by algorithm.py)
 
-    The covariate prefix is read from self._X_ctx, which the caller must
-    set to (n, t+1, n_cov) before invoking this method.  If _X_ctx is
-    None or has mismatched length, we fall back to Y-only features.
+    The covariate prefix is read from self._X_ctx (n, t+1, n_cov).
+    The static covariates are read from self._S_ctx (n, N_STATIC).
+    Both must be set by the caller before invoking this method.
 
     Returns
     -------
-    (n, 35) feature matrix when X is available:
-      5 stats (mean, std, min, max, last) x 7 variables
-      = 5 for Heart Rate + 5 x 6 covariates = 35 features
+    (n, 26) feature matrix when X and S are available:
+      5 stats x 4 dynamic vars + 6 static = 26 features
 
-    (n, 5) feature matrix when X is unavailable (fallback).
+    Falls back gracefully if auxiliary arrays are missing.
     """
     Y = prefixes[..., 0]          # (n, t+1)
     n, T = Y.shape
 
-    # Heart Rate summary (always available)
+    # NaCl summary (always available)
     feat_y = _summarize_series(Y)  # (n, 5)
 
-    # Covariate summaries (from auxiliary storage)
+    # Dynamic covariate summaries (from auxiliary storage)
     X_ctx = getattr(self, '_X_ctx', None)
     if X_ctx is not None and X_ctx.shape[0] == n and X_ctx.shape[1] == T:
         n_cov = X_ctx.shape[2]
         cov_feats = [_summarize_series(X_ctx[:, :, j]) for j in range(n_cov)]
-        raw = np.column_stack([feat_y] + cov_feats)  # (n, 5 + 5*n_cov)
+        dynamic = np.column_stack([feat_y] + cov_feats)  # (n, 5 + 5*n_cov)
     else:
-        raw = feat_y  # (n, 5) — fallback
+        dynamic = feat_y  # (n, 5) fallback
+
+    # Static covariates (from auxiliary storage)
+    S_ctx = getattr(self, '_S_ctx', None)
+    if S_ctx is not None and S_ctx.shape[0] == n:
+        raw = np.column_stack([dynamic, S_ctx])  # (n, 20 + 6 = 26)
+    else:
+        raw = dynamic
 
     # Standardize using training-set statistics so that all groups (train,
     # test, cal) are on the same scale.  self._feat_mu / self._feat_std are
@@ -250,8 +348,6 @@ def _richer_featurize_prefixes(self, prefixes):
     if mu is not None and std is not None and mu.shape[-1] == raw.shape[1]:
         return (raw - mu) / std
     else:
-        # No reference stats yet — return raw (will be overwritten once
-        # training features are computed and stats are stored).
         return raw
 
 
@@ -259,6 +355,7 @@ def _richer_featurize_prefixes(self, prefixes):
 # Diagnostic helpers (identical pattern to finance_conformal.py)
 # =============================================================================
 
+# Print a concise summary of LR calibration weights at time step t
 def _print_weight_diagnostic(weights, t, label=""):
     """Print a concise summary of LR calibration weights at time step t."""
     w = np.asarray(weights, dtype=float)
@@ -282,13 +379,17 @@ def _print_weight_diagnostic(weights, t, label=""):
     print(f"    histogram: {hist_str}")
 
 
+# Build human-readable feature names for the 26-feature vector
 def _build_feat_names():
-    """Build human-readable names for the 35-feature vector."""
+    """Build human-readable names for the 26-feature vector."""
     stats = ["mean", "std", "min", "max", "last"]
     var_names = [TARGET_VAR] + COVARIATE_VARS
-    return [f"{v}|{s}" for v in var_names for s in stats]
+    names = [f"{v}|{s}" for v in var_names for s in stats]
+    names += ["Age", "gender_M"] + [f"eth_{e}" for e in ETHNICITY_DUMMIES]
+    return names
 
 
+# Compare per-feature mean/std between train, test, and cal prefixes
 def _print_feature_diagnostic(predictor, cal_feat, t):
     """Compare per-feature mean/std between train, test, and cal prefixes."""
     train_feat = predictor._train_feat_t
@@ -313,6 +414,7 @@ def _print_feature_diagnostic(predictor, cal_feat, t):
               f"|sep|={sep:.3f}")
 
 
+# Report the fitted logistic classifier's training accuracy and coef norm
 def _print_classifier_diagnostic(predictor, cal_feat, t):
     """Report the fitted logistic classifier's training accuracy and coef norm."""
     clf = predictor._clf
@@ -335,36 +437,43 @@ def _print_classifier_diagnostic(predictor, cal_feat, t):
 
 
 # =============================================================================
-# Prediction model: cross-sectional linear regression on clinical covariates
+# Prediction model: cross-sectional linear regression on covariates + statics
 # =============================================================================
 
 class LinearCovariateModel:
     """
     Cross-sectional OLS model:
-      HR_t ≈ β₀ + β₁·RespRate_t + β₂·O2Sat_t + β₃·BPsys_t
-                 + β₄·BPdia_t + β₅·BPmean_t + β₆·NaCl_t
+      NaCl_t ~ beta_0 + beta_1*HR_t + beta_2*RR_t + beta_3*O2Sat_t
+             + beta_4*Age + beta_5*gender_M
+             + beta_6*eth_BLACK + beta_7*eth_HISPANIC + beta_8*eth_ASIAN
+             + beta_9*eth_OTHER
 
-    Fitted across all (patient, timestep) pairs in the training prefix.
+    Dynamic covariates vary per (patient, timestep); static covariates are
+    constant per patient but tiled across timesteps for design matrix assembly.
     """
 
-    def __init__(self, cov_names):
+    def __init__(self, cov_names, static_names):
         self.cov_names = cov_names
+        self.static_names = static_names
         self.beta = None
         self.noise_std = 1.0
 
-    def fit(self, Y_train, X_train, verbose=False):
+    def fit(self, Y_train, X_train, S_train, verbose=False):
         """
         Parameters
         ----------
-        Y_train : (n, L_prefix, 1)   Heart Rate prefix
-        X_train : (n, L_prefix, n_cov)   covariate prefix
+        Y_train : (n, L_prefix, 1)   NaCl 0.9% prefix
+        X_train : (n, L_prefix, n_cov)   dynamic covariate prefix
+        S_train : (n, N_STATIC)   static covariates
         """
         n, L, n_cov = X_train.shape
         if L < 2:
             return
-        y = Y_train[:, :, 0].reshape(-1)
-        X = X_train.reshape(-1, n_cov)
-        X_design = np.hstack([np.ones((len(y), 1)), X])
+        y = Y_train[:, :, 0].reshape(-1)   # (n * L,)
+        X_dyn = X_train.reshape(-1, n_cov)  # (n * L, n_cov)
+        # Tile static covariates: each patient's statics repeated L times
+        S_tiled = np.repeat(S_train, L, axis=0)  # (n * L, N_STATIC)
+        X_design = np.hstack([np.ones((len(y), 1)), X_dyn, S_tiled])
         self.beta, *_ = np.linalg.lstsq(X_design, y, rcond=None)
         resid = y - X_design @ self.beta
         self.noise_std = float(np.std(resid, ddof=X_design.shape[1]))
@@ -373,22 +482,28 @@ class LinearCovariateModel:
             print(f"  [Model] Residual std : {self.noise_std:.4f}")
             print(f"  [Model] Coefficients :")
             print(f"            intercept = {self.beta[0]:.4f}")
-            for name, coef in zip(self.cov_names, self.beta[1:]):
+            all_names = list(self.cov_names) + list(self.static_names)
+            for name, coef in zip(all_names, self.beta[1:]):
                 print(f"            {name:42s} = {coef:.4f}")
 
-    def predict(self, x_t):
-        """Predict Heart Rate given covariate vector x_t (shape (n_cov,))."""
+    def predict(self, x_dyn, s_static):
+        """
+        Predict NaCl 0.9% given dynamic covariate vector x_dyn (n_cov,)
+        and static covariate vector s_static (N_STATIC,).
+        """
         if self.beta is None:
             return 0.0
-        return float(self.beta[0] + x_t @ self.beta[1:])
+        features = np.concatenate([[1.0], x_dyn, s_static])
+        return float(features @ self.beta)
 
 
 # =============================================================================
 # Gamma selection (mirrors _select_gamma in finance_conformal.py)
 # =============================================================================
 
-def _select_gamma(Y_train, X_train, cov_names, base_alpha, t_max, gamma_grid,
-                  seed=0):
+# Select gamma by running simple ACI on a 3-way split of training data
+def _select_gamma(Y_train, X_train, S_train, cov_names, static_names,
+                  base_alpha, t_max, gamma_grid, seed=0):
     """
     Select gamma by running simple ACI on a 3-way split of training data up
     to t_max.  Uses the linear covariate model (no LR weighting).
@@ -408,9 +523,9 @@ def _select_gamma(Y_train, X_train, cov_names, base_alpha, t_max, gamma_grid,
     idx1 = perm[:n1]
     idx2 = perm[n1 : n1 + n2]
     idx3 = perm[n1 + n2 :]
-    Y_fit_sel = Y_train[idx1];  X_fit_sel = X_train[idx1]
-    Y_cal_sel = Y_train[idx2];  X_cal_sel = X_train[idx2]
-    Y_eval    = Y_train[idx3];  X_eval    = X_train[idx3]
+    Y_fit_sel = Y_train[idx1];  X_fit_sel = X_train[idx1];  S_fit_sel = S_train[idx1]
+    Y_cal_sel = Y_train[idx2];  X_cal_sel = X_train[idx2];  S_cal_sel = S_train[idx2]
+    Y_eval    = Y_train[idx3];  X_eval    = X_train[idx3];  S_eval    = S_train[idx3]
     n_eval    = Y_eval.shape[0]
     L         = Y_train.shape[1]
     horizon   = min(t_max, L - 1)
@@ -424,14 +539,16 @@ def _select_gamma(Y_train, X_train, cov_names, base_alpha, t_max, gamma_grid,
         alpha_series = np.full(n_eval, base_alpha, dtype=float)
         cov_hist = []
         for t in range(horizon + 1):
-            sel_model = LinearCovariateModel(cov_names)
-            sel_model.fit(Y_fit_sel[:, :t+1, :], X_fit_sel[:, :t+1, :])
+            sel_model = LinearCovariateModel(cov_names, static_names)
+            sel_model.fit(Y_fit_sel[:, :t+1, :], X_fit_sel[:, :t+1, :],
+                          S_fit_sel)
             predictor.noise_std = sel_model.noise_std
             cal_scores = []
             for i in range(len(idx2)):
                 for s in range(t + 1):
                     y_true = float(Y_cal_sel[i, s, 0])
-                    y_pred = sel_model.predict(X_cal_sel[i, s, :])
+                    y_pred = sel_model.predict(X_cal_sel[i, s, :],
+                                               S_cal_sel[i, :])
                     cal_scores.append(abs(y_true - y_pred))
             predictor._scores  = np.array(cal_scores, dtype=float)
             predictor._weights = np.ones(len(cal_scores), dtype=float)
@@ -441,8 +558,9 @@ def _select_gamma(Y_train, X_train, cov_names, base_alpha, t_max, gamma_grid,
             step_cov = []
             for i in range(n_eval):
                 x_t    = X_eval[i, t, :]
+                s_i    = S_eval[i, :]
                 y_true = float(Y_eval[i, t, 0])
-                y_pred = sel_model.predict(x_t)
+                y_pred = sel_model.predict(x_t, s_i)
                 a = float(np.clip(alpha_used[i], 1e-6, 1 - 1e-6))
                 q = predictor._weighted_quantile(
                     predictor._scores, predictor._weights, 1.0 - a)
@@ -473,24 +591,29 @@ def _select_gamma(Y_train, X_train, cov_names, base_alpha, t_max, gamma_grid,
 # =============================================================================
 
 def run_medical_experiment(data, cal_frac=0.5, alpha=0.1, seed=42,
-                           gamma_grid=None, with_shift=False):
+                           gamma_grid=None, with_shift=False,
+                           n_traincal=None, n_test=None):
     """
     Run AdaptedCAFHT conformal prediction on sepsis ICU data.
 
     Parameters
     ----------
     data : dict
-        Output of medical_data.load_data().
+        Output of load_data() — pickle with patient_ids and trajectories.
     cal_frac : float
         Fraction of TrainCal patients used for calibration.
     alpha : float
         Miscoverage level.
     seed : int
-        Random seed for Train/Cal split and gamma selection.
+        Random seed for Train/Cal split, subsampling, and gamma selection.
     gamma_grid : list[float]
         ACI step-size candidates.
     with_shift : bool
         Whether to use likelihood-ratio covariate-shift weighting.
+    n_traincal : int or None
+        If set, randomly subsample this many TrainCal patients.
+    n_test : int or None
+        If set, randomly subsample this many Test patients.
 
     Returns
     -------
@@ -499,17 +622,34 @@ def run_medical_experiment(data, cal_frac=0.5, alpha=0.1, seed=42,
     if gamma_grid is None:
         gamma_grid = GAMMA_GRID
 
-    # ── Convert nested dicts to arrays ────────────────────────────────────
-    Y_traincal, X_traincal = _convert_to_arrays(
-        data["patient_trajectory_list_traincal"])
-    Y_test_all, X_test_all = _convert_to_arrays(
-        data["patient_trajectory_list_test"])
+    # -- Subsample patients if requested -----------------------------------
+    rng_sub = np.random.default_rng(seed)
+
+    traincal_list = data["patient_trajectory_list_traincal"]
+    traincal_ids  = data["patient_ids_traincal"]
+    if n_traincal is not None and n_traincal < len(traincal_list):
+        sub_idx = rng_sub.choice(len(traincal_list), size=n_traincal, replace=False)
+        sub_idx.sort()
+        traincal_list = [traincal_list[i] for i in sub_idx]
+        traincal_ids  = [traincal_ids[i] for i in sub_idx]
+
+    test_list = data["patient_trajectory_list_test"]
+    test_ids  = data["patient_ids_test"]
+    if n_test is not None and n_test < len(test_list):
+        sub_idx = rng_sub.choice(len(test_list), size=n_test, replace=False)
+        sub_idx.sort()
+        test_list = [test_list[i] for i in sub_idx]
+        test_ids  = [test_ids[i] for i in sub_idx]
+
+    # -- Convert nested dicts to arrays ------------------------------------
+    Y_traincal, X_traincal, S_traincal = _convert_to_arrays(traincal_list)
+    Y_test_all, X_test_all, S_test_all = _convert_to_arrays(test_list)
 
     n_traincal, L, _ = Y_traincal.shape
     n_test = Y_test_all.shape[0]
     T = L - 1  # 23 prediction steps (hours 0..22, predicting 1..23)
 
-    # ── Split TrainCal → Train + Cal ──────────────────────────────────────
+    # -- Split TrainCal -> Train + Cal -------------------------------------
     rng       = np.random.default_rng(seed)
     perm      = rng.permutation(n_traincal)
     n_cal     = int(n_traincal * cal_frac)
@@ -520,11 +660,12 @@ def run_medical_experiment(data, cal_frac=0.5, alpha=0.1, seed=42,
     train_idx = perm[:n_train]
     cal_idx   = perm[n_train:]
 
-    Y_train, X_train = Y_traincal[train_idx], X_traincal[train_idx]
-    Y_cal,   X_cal   = Y_traincal[cal_idx],   X_traincal[cal_idx]
-    Y_test,  X_test  = Y_test_all, X_test_all
+    Y_train, X_train, S_train = Y_traincal[train_idx], X_traincal[train_idx], S_traincal[train_idx]
+    Y_cal,   X_cal,   S_cal   = Y_traincal[cal_idx],   X_traincal[cal_idx],   S_traincal[cal_idx]
+    Y_test,  X_test,  S_test  = Y_test_all, X_test_all, S_test_all
 
     cov_names = COVARIATE_VARS
+    static_names = ["Age", "gender_M"] + [f"eth_{e}" for e in ETHNICITY_DUMMIES]
 
     print(f"\n{'='*62}")
     print(f"  Medical Conformal Experiment  (AdaptedCAFHT)")
@@ -536,24 +677,27 @@ def run_medical_experiment(data, cal_frac=0.5, alpha=0.1, seed=42,
     print(f"  Time steps      : {L} hours  [0 .. {T}]")
     print(f"  Target (Y)      : {TARGET_VAR}")
     print(f"  Covariates (X)  : {cov_names}")
+    print(f"  Static (S)      : {static_names}")
     print(f"  Alpha           : {alpha}  (target = {1-alpha:.0%})")
     print(f"  Gamma grid      : {gamma_grid}")
     print(f"  With shift      : {with_shift}")
     print()
 
-    # ── Set up predictor ──────────────────────────────────────────────────
+    # -- Set up predictor --------------------------------------------------
     predictor    = AdaptedCAFHT(alpha=alpha)
-    linear_model = LinearCovariateModel(cov_names)
+    linear_model = LinearCovariateModel(cov_names, static_names)
 
-    # Monkey-patch richer featurizer (7 summary stats over Heart Rate prefix)
+    # Monkey-patch richer featurizer (summary stats + static covariates)
     predictor._featurize_prefixes = types.MethodType(
         _richer_featurize_prefixes, predictor
     )
-    print(f"  Featurizer      : richer (mean/std/min/max/last over "
-          f"{TARGET_VAR} + 6 covariates = 35 features)")
+    n_dyn_feat = 5 * (1 + len(COVARIATE_VARS))
+    n_total_feat = n_dyn_feat + N_STATIC
+    print(f"  Featurizer      : richer ({n_dyn_feat} dynamic + {N_STATIC} static"
+          f" = {n_total_feat} features)")
     print()
 
-    # ── ACI state ─────────────────────────────────────────────────────────
+    # -- ACI state ---------------------------------------------------------
     alpha_t   = np.full(n_test, alpha, dtype=float)
     gamma_opt = float(gamma_grid[0])
 
@@ -565,20 +709,20 @@ def run_medical_experiment(data, cal_frac=0.5, alpha=0.1, seed=42,
     first_lower = []
     first_upper = []
 
-    # ── Main loop: for each hour t, predict hour t+1 ─────────────────────
+    # -- Main loop: for each hour t, predict hour t+1 ---------------------
     for t in range(T):
 
-        # ── Fit linear model on training prefix ──────────────────────────
-        linear_model.fit(Y_train[:, :t+2, :], X_train[:, :t+2, :],
+        # -- Fit linear model on training prefix --------------------------
+        linear_model.fit(Y_train[:, :t+2, :], X_train[:, :t+2, :], S_train,
                          verbose=(t == T - 1))
         predictor.noise_std = linear_model.noise_std
 
-        # ── Build calibration scores ─────────────────────────────────────
+        # -- Build calibration scores -------------------------------------
         cal_scores = []
         for i in range(n_cal):
             for s in range(t + 2):
                 y_true = float(Y_cal[i, s, 0])
-                y_pred = linear_model.predict(X_cal[i, s, :])
+                y_pred = linear_model.predict(X_cal[i, s, :], S_cal[i, :])
                 cal_scores.append(abs(y_true - y_pred))
         cal_scores_arr = np.array(cal_scores, dtype=float)
 
@@ -587,11 +731,12 @@ def run_medical_experiment(data, cal_frac=0.5, alpha=0.1, seed=42,
         predictor._weights = np.ones(len(cal_scores_arr), dtype=float)
         predictor._q       = None
 
-        # ── Gamma selection every 5 steps ───────────────────────────────
+        # -- Gamma selection every 5 steps --------------------------------
         if t > 0 and (t % 5 == 0):
             sel_seed = seed + 10000 + t
             gamma_opt, gamma_scores = _select_gamma(
-                Y_train=Y_train, X_train=X_train, cov_names=cov_names,
+                Y_train=Y_train, X_train=X_train, S_train=S_train,
+                cov_names=cov_names, static_names=static_names,
                 base_alpha=alpha, t_max=t, gamma_grid=gamma_grid,
                 seed=sel_seed,
             )
@@ -604,7 +749,7 @@ def run_medical_experiment(data, cal_frac=0.5, alpha=0.1, seed=42,
 
         gamma_opt_history.append(float(gamma_opt))
 
-        # ── Prediction loop ──────────────────────────────────────────────
+        # -- Prediction loop ----------------------------------------------
         if with_shift and t >= 1:
             train_prefixes = Y_train[:, :t+1, :]
             mid   = n_test // 2
@@ -618,23 +763,24 @@ def run_medical_experiment(data, cal_frac=0.5, alpha=0.1, seed=42,
 
             for pred_idx, ctx_idx in [(half1, half2), (half2, half1)]:
 
-                # Featurize train prefixes (set X context for train).
-                # Compute raw features first, then derive standardization
-                # stats from training data and apply to all groups.
+                # Featurize train prefixes: compute raw features first,
+                # then derive standardization stats from training data.
                 predictor._X_ctx = X_train[:, :t+1, :]
-                predictor._feat_mu = None   # reset so train gets raw
+                predictor._S_ctx = S_train
+                predictor._feat_mu = None
                 predictor._feat_std = None
                 train_raw = predictor._featurize_prefixes(train_prefixes)
-                # Now set standardization stats from training features
                 predictor._feat_mu  = train_raw.mean(axis=0, keepdims=True)
                 predictor._feat_std = train_raw.std(axis=0, keepdims=True) + 1e-8
                 # Re-featurize train with standardization applied
                 predictor._X_ctx = X_train[:, :t+1, :]
+                predictor._S_ctx = S_train
                 predictor._train_feat_t = predictor._featurize_prefixes(
                     train_prefixes)
 
                 # Featurize test-half prefixes (uses train stats)
                 predictor._X_ctx = X_test[ctx_idx, :t+1, :]
+                predictor._S_ctx = S_test[ctx_idx]
                 predictor._test_feat_t = predictor._featurize_prefixes(
                     Y_test[ctx_idx, :t+1, :])
 
@@ -645,6 +791,7 @@ def run_medical_experiment(data, cal_frac=0.5, alpha=0.1, seed=42,
 
                 # Featurize cal prefixes (uses train stats)
                 predictor._X_ctx = X_cal[:, :t+1, :]
+                predictor._S_ctx = S_cal
                 cal_feat = predictor._featurize_prefixes(Y_cal[:, :t+1, :])
 
                 # Compute per-series LR weights for cal data
@@ -682,8 +829,9 @@ def run_medical_experiment(data, cal_frac=0.5, alpha=0.1, seed=42,
 
                 for i in pred_idx:
                     x_t    = X_test[i, t+1, :]
+                    s_i    = S_test[i, :]
                     y_true = float(Y_test[i, t+1, 0])
-                    y_pred = linear_model.predict(x_t)
+                    y_pred = linear_model.predict(x_t, s_i)
                     a = float(np.clip(alpha_used[i], 1e-6, 1 - 1e-6))
                     q = predictor._weighted_quantile(
                         predictor._scores, predictor._weights, 1.0 - a)
@@ -709,8 +857,9 @@ def run_medical_experiment(data, cal_frac=0.5, alpha=0.1, seed=42,
 
             for i in range(n_test):
                 x_t    = X_test[i, t+1, :]
+                s_i    = S_test[i, :]
                 y_true = float(Y_test[i, t+1, 0])
-                y_pred = linear_model.predict(x_t)
+                y_pred = linear_model.predict(x_t, s_i)
                 a = float(np.clip(alpha_used[i], 1e-6, 1 - 1e-6))
                 q = predictor._weighted_quantile(
                     predictor._scores, predictor._weights, 1.0 - a)
@@ -743,7 +892,6 @@ def run_medical_experiment(data, cal_frac=0.5, alpha=0.1, seed=42,
     print(f"  Final gamma_opt  : {gamma_opt}")
 
     # Pick patient IDs for the first test patient (for plot title)
-    test_ids = data["patient_ids_test"]
     first_test_id = test_ids[0] if test_ids else "unknown"
 
     return {
@@ -760,16 +908,17 @@ def run_medical_experiment(data, cal_frac=0.5, alpha=0.1, seed=42,
             "upper": first_upper,
         },
         "config": {
-            "n_train":     int(n_train),
-            "n_cal":       int(n_cal),
-            "n_test":      int(n_test),
-            "L":           int(L),
-            "alpha":       alpha,
-            "gamma_grid":  [float(g) for g in gamma_grid],
-            "seed":        seed,
-            "with_shift":  with_shift,
-            "target_var":  TARGET_VAR,
-            "cov_names":   cov_names,
+            "n_train":      int(n_train),
+            "n_cal":        int(n_cal),
+            "n_test":       int(n_test),
+            "L":            int(L),
+            "alpha":        alpha,
+            "gamma_grid":   [float(g) for g in gamma_grid],
+            "seed":         seed,
+            "with_shift":   with_shift,
+            "target_var":   TARGET_VAR,
+            "cov_names":    cov_names,
+            "static_names": static_names,
         },
     }
 
@@ -819,11 +968,11 @@ def plot_results(results, save_path=None):
 
     # Plot 2: Interval width over time
     axes[0, 1].plot(x, width_t, 'g-', linewidth=1.5)
-    axes[0, 1].set_ylabel('Mean interval width (bpm)')
+    axes[0, 1].set_ylabel('Mean interval width (mL)')
     axes[0, 1].set_title('Prediction Interval Width over Time')
     axes[0, 1].grid(True, alpha=0.3)
 
-    # Plot 3: First test patient — actual HR vs prediction interval
+    # Plot 3: First test patient --- actual NaCl vs prediction interval
     true_arr  = np.array(first["true"])
     lower_arr = np.array(first["lower"])
     upper_arr = np.array(first["upper"])
@@ -833,10 +982,10 @@ def plot_results(results, save_path=None):
     axes[1, 0].fill_between(x, lower_arr, upper_arr, alpha=0.25,
                              color='steelblue', label='Prediction interval')
     axes[1, 0].plot(x, true_arr, 'k-', linewidth=1.5,
-                     label='Actual Heart Rate')
+                     label='Actual NaCl 0.9%')
     axes[1, 0].set_ylim(y_min - margin, y_max + margin)
-    axes[1, 0].set_ylabel('Heart Rate (bpm)')
-    axes[1, 0].set_title(f'Patient {patient} — Actual HR vs. Prediction Interval')
+    axes[1, 0].set_ylabel('NaCl 0.9% (mL)')
+    axes[1, 0].set_title(f'Patient {patient} --- Actual NaCl vs. Prediction Interval')
     axes[1, 0].legend()
     axes[1, 0].grid(True, alpha=0.3)
 
@@ -874,7 +1023,7 @@ def main():
         description="Run AdaptedCAFHT conformal prediction on sepsis ICU data."
     )
     parser.add_argument("--pkl",         required=True,
-                        help="Path to sepsis_experiment_data.pkl")
+                        help="Path to sepsis_experiment_data_nacl_target.pkl")
     parser.add_argument("--cal_frac",    type=float, default=0.5,
                         help="Fraction of TrainCal used for calibration "
                              "(default: 0.5)")
@@ -882,6 +1031,12 @@ def main():
                         help="Miscoverage level (default: 0.1)")
     parser.add_argument("--seed",        type=int,   default=42,
                         help="Random seed (default: 42)")
+    parser.add_argument("--n_traincal",  type=int,   default=None,
+                        help="Randomly subsample this many TrainCal patients "
+                             "(default: use all)")
+    parser.add_argument("--n_test",      type=int,   default=None,
+                        help="Randomly subsample this many Test patients "
+                             "(default: use all)")
     parser.add_argument("--gamma_grid",  type=float, nargs='+',
                         default=GAMMA_GRID,
                         help="ACI step-size candidates "
@@ -904,6 +1059,8 @@ def main():
         seed=args.seed,
         gamma_grid=args.gamma_grid,
         with_shift=args.with_shift,
+        n_traincal=args.n_traincal,
+        n_test=args.n_test,
     )
 
     if args.save_json:
