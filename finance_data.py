@@ -413,7 +413,11 @@ def _download_all(tickers, start, end, interval) -> dict[str, pd.DataFrame]:
                 print(f"[WARNING] Empty download for {ticker}.")
                 continue
             if isinstance(df.columns, pd.MultiIndex):
-                df.columns = df.columns.get_level_values(0)
+                level = next(
+                    i for i in range(df.columns.nlevels)
+                    if "Close" in df.columns.get_level_values(i)
+                )
+                df.columns = df.columns.get_level_values(level)
             df.index = pd.to_datetime(df.index).normalize()
             data[ticker] = df
         except Exception as e:
@@ -459,7 +463,11 @@ def _fetch_52w_lows(tickers: list[str], start: str, interval: str = "1d") -> dic
                 progress=False,
             )
             if isinstance(df.columns, pd.MultiIndex):
-                df.columns = df.columns.get_level_values(0)
+                level = next(
+                    i for i in range(df.columns.nlevels)
+                    if "Low" in df.columns.get_level_values(i)
+                )
+                df.columns = df.columns.get_level_values(level)
             if df.empty or "Low" not in df.columns:
                 result[ticker] = None
                 continue

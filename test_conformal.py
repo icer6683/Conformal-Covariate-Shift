@@ -54,8 +54,21 @@ Algorithm predictor examples:
 """
 
 import numpy as np
+import matplotlib
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import argparse
+from pathlib import Path
+
+# ── Shared plot style ────────────────────────────────────────────────────────
+_C_COV    = "#2166ac"   # coverage / primary  (blue)
+_C_TARGET = "#d6604d"   # target line         (red-orange)
+_C_WIDTH  = "#4dac26"   # width line          (green)
+_C_ALPHA  = "#7b2d8b"   # ACI alpha           (purple)
+
+def _style_ax(ax):
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
 from ts_generator import TimeSeriesGenerator
 from adaptive_conformal import OnlineConformalPredictor
 from algorithm import AdaptedCAFHT
@@ -577,130 +590,134 @@ def _select_gamma_simple_aci(train_Y: np.ndarray, base_alpha: float, t_max: int,
 
 
 
-def plot_time_based_results(results_by_time, target_coverage, predictor_type="basic", 
-                          covariate_mode="static", with_shift=False):
+def plot_time_based_results(results_by_time, target_coverage, predictor_type="basic",
+                            covariate_mode="static", with_shift=False, save_path=None):
     """Plot coverage results by time step."""
-    fig, axes = plt.subplots(2, 3, figsize=(18, 10))  # Changed to 2x3 for 5 plots
-    
-    # Extract time-based data (exclude non-integer keys)
-    time_steps = sorted([k for k in results_by_time.keys() if isinstance(k, int)])
-    coverage_rates = [results_by_time[t]['coverage_rate'] for t in time_steps]
+    time_steps      = sorted([k for k in results_by_time.keys() if isinstance(k, int)])
+    coverage_rates  = [results_by_time[t]['coverage_rate']  for t in time_steps]
     interval_widths = [results_by_time[t]['interval_width'] for t in time_steps]
-    
-    # Build title
-    predictor_str = predictor_type.capitalize()
-    if predictor_type == "algorithm":
-        predictor_str = "Algorithm (AdaptedCAFHT)"
-    mode_str = "Dynamic $X_t$" if str(covariate_mode).lower() == "dynamic" else "Static X"
+
+    predictor_str = "Algorithm (AdaptedCAFHT)" if predictor_type == "algorithm" \
+                    else predictor_type.capitalize()
+    mode_str  = "Dynamic $X_t$" if str(covariate_mode).lower() == "dynamic" else "Static X"
     shift_str = "with Shift" if with_shift else "no Shift"
-    main_title = f"Time-Based Coverage Analysis — {predictor_str}, {mode_str}, {shift_str}"
-    fig.suptitle(main_title, fontsize=14, fontweight='bold')
-    
-    # Plot 1: Coverage rate by time step (all series averaged)
-    axes[0, 0].plot(time_steps, coverage_rates, 'b-', linewidth=2)
-    axes[0, 0].set_ylim(0.8, 1)
-    axes[0, 0].axhline(y=target_coverage, color='red', linestyle='--', linewidth=2,
-                    label=f'Target ({target_coverage:.1%})')
-    axes[0, 0].set_xlabel('Time Step t')
-    axes[0, 0].set_ylabel('Coverage Rate')
-    axes[0, 0].set_title('Coverage Rate vs. Time Step (All Series)')
-    axes[0, 0].legend()
-    axes[0, 0].grid(True, alpha=0.3)
-    
-    # Plot 2: Interval width by time step (all series averaged)
-    axes[0, 1].plot(time_steps, interval_widths, 'g-', linewidth=2, markersize=6)
-    axes[0, 1].set_xlabel('Time Step t')
-    axes[0, 1].set_ylabel('Average Interval Width')
-    axes[0, 1].set_title('Prediction Interval Width vs. Time Step (All Series)')
-    axes[0, 1].grid(True, alpha=0.3)
-    
-    # Plot 3: First test series with actual true values
+
+    fig, axes = plt.subplots(2, 3, figsize=(16, 9))
+    fig.suptitle(
+        f"Time-Based Coverage  —  {predictor_str},  {mode_str},  {shift_str}",
+        fontsize=12, fontweight="bold",
+    )
+
+    # ── Plot 1: Coverage rate over all series ─────────────────────────────────
+    ax = axes[0, 0]
+    ax.plot(time_steps, coverage_rates, color=_C_COV, linewidth=2)
+    ax.set_ylim(0.8, 1.0)
+    ax.axhline(target_coverage, color=_C_TARGET, linestyle="--", linewidth=1.8,
+               label=f"Target ({target_coverage:.1%})")
+    ax.set_xlabel("Time step $t$", fontsize=10)
+    ax.set_ylabel("Coverage rate", fontsize=10)
+    ax.set_title("Coverage Rate vs. Time (All Series)", fontsize=10)
+    ax.legend(fontsize=9)
+    ax.grid(True, alpha=0.25)
+    _style_ax(ax)
+
+    # ── Plot 2: Interval width over all series ────────────────────────────────
+    ax = axes[0, 1]
+    ax.plot(time_steps, interval_widths, color=_C_WIDTH, linewidth=2)
+    ax.set_xlabel("Time step $t$", fontsize=10)
+    ax.set_ylabel("Average interval width", fontsize=10)
+    ax.set_title("Prediction Interval Width vs. Time (All Series)", fontsize=10)
+    ax.grid(True, alpha=0.25)
+    _style_ax(ax)
+
+    # ── Plot 3: First test series — true values + prediction interval ─────────
+    ax = axes[0, 2]
     if 'example_true_values' in results_by_time:
-        # Get the stored example data (always index 0)
-        true_values = results_by_time['example_true_values']
+        true_values  = results_by_time['example_true_values']
         lower_bounds = results_by_time['example_lower_bounds']
         upper_bounds = results_by_time['example_upper_bounds']
-        
-        plot_steps = time_steps[:len(true_values)]
-        
-        # Plot the three lines
-        axes[0, 2].plot(plot_steps, lower_bounds, 'b--', linewidth=1.5, alpha=0.7, label='Lower Bound')
-        axes[0, 2].plot(plot_steps, upper_bounds, 'b--', linewidth=1.5, alpha=0.7, label='Upper Bound')
-        axes[0, 2].plot(plot_steps, true_values, 'r-', linewidth=2, label='True Values')
-        
-        # Shade the prediction interval
-        axes[0, 2].fill_between(plot_steps, lower_bounds, upper_bounds, 
-                            alpha=0.2, color='blue')
-        
-        axes[0, 2].set_xlabel('Time Step t')
-        axes[0, 2].set_ylabel('Value')
-        axes[0, 2].set_title('First Test Series: Predictions and True Values')
-        axes[0, 2].legend(loc='best')
-        axes[0, 2].grid(True, alpha=0.3)
-    
-    # Plot 4: Running average coverage for first test series
-    if 'example_true_values' in results_by_time:
-        # Calculate coverage for the first series at each time step
-        first_series_coverage = []
-        for i, t in enumerate(plot_steps):
-            covered = (lower_bounds[i] <= true_values[i] <= upper_bounds[i])
-            first_series_coverage.append(1 if covered else 0)
-        
-        # Calculate running average
-        running_avg_coverage = []
-        for i in range(len(first_series_coverage)):
-            running_avg = np.mean(first_series_coverage[:i+1])
-            running_avg_coverage.append(running_avg)
-        
-        axes[1, 0].plot(plot_steps, running_avg_coverage, 'b-', linewidth=2)
-        axes[1, 0].set_ylim(0.7, 1.05)
-        axes[1, 0].axhline(y=target_coverage, color='red', linestyle='--', linewidth=2,
-                        label=f'Target ({target_coverage:.1%})')
-        axes[1, 0].set_xlabel('Time Step t')
-        axes[1, 0].set_ylabel('Running Average Coverage')
-        axes[1, 0].set_title('First Test Series: Running Average Coverage')
-        axes[1, 0].legend()
-        axes[1, 0].grid(True, alpha=0.3)
-        
-        # Add final coverage rate text
-        final_coverage = running_avg_coverage[-1] if running_avg_coverage else 0
-        axes[1, 0].text(0.02, 0.05, f'Final Coverage: {final_coverage:.1%}', 
-                       transform=axes[1, 0].transAxes, fontsize=10,
-                       bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
-    
-    # Plot 5: Interval width for first test series only
-    if 'example_true_values' in results_by_time:
-        # Calculate interval widths for the first series
-        first_series_widths = [upper_bounds[i] - lower_bounds[i] for i in range(len(plot_steps))]
-        
-        axes[1, 1].plot(plot_steps, first_series_widths, 'g-', linewidth=2, markersize=6)
-        axes[1, 1].set_xlabel('Time Step t')
-        axes[1, 1].set_ylabel('Interval Width')
-        axes[1, 1].set_title('First Test Series: Interval Width Over Time')
-        axes[1, 1].grid(True, alpha=0.3)
-        
-        # Add text showing mean width for this series
-        mean_width = np.mean(first_series_widths)
-        axes[1, 1].text(0.02, 0.95, f'Mean Width: {mean_width:.3f}', 
-                       transform=axes[1, 1].transAxes, fontsize=10,
-                       bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
-    
-    # Plot 6: Alpha series for the first test series (algorithm + ACI only)
-    if predictor_type == "algorithm" and 'example_alpha_levels' in results_by_time:
-        alpha_vals = results_by_time['example_alpha_levels']
-        plot_steps_alpha = time_steps[:len(alpha_vals)]
-        axes[1, 2].plot(plot_steps_alpha, alpha_vals, linewidth=2)
-        axes[1, 2].set_ylim(0.0, 1.0)
-        axes[1, 2].set_xlabel('Time Step t')
-        axes[1, 2].set_ylabel('Alpha Level')
-        axes[1, 2].set_title('First Test Series: ACI Alpha Over Time')
-        axes[1, 2].grid(True, alpha=0.3)
+        plot_steps   = time_steps[:len(true_values)]
+
+        ax.fill_between(plot_steps, lower_bounds, upper_bounds,
+                        alpha=0.25, color=_C_COV)
+        ax.plot(plot_steps, lower_bounds, color=_C_COV, linewidth=1.2,
+                linestyle="--", alpha=0.7, label="Bounds")
+        ax.plot(plot_steps, upper_bounds, color=_C_COV, linewidth=1.2,
+                linestyle="--", alpha=0.7)
+        ax.plot(plot_steps, true_values, color=_C_TARGET, linewidth=1.8,
+                label="True values")
+        ax.set_xlabel("Time step $t$", fontsize=10)
+        ax.set_ylabel("Value", fontsize=10)
+        ax.set_title("First Test Series: True vs. Interval", fontsize=10)
+        ax.legend(fontsize=9)
+        ax.grid(True, alpha=0.25)
     else:
-        # Hide the unused 6th subplot
-        axes[1, 2].axis('off')
-    
-    plt.tight_layout()
-    plt.show()
+        ax.axis("off")
+    _style_ax(ax)
+
+    # ── Plot 4: Running average coverage for first test series ────────────────
+    ax = axes[1, 0]
+    if 'example_true_values' in results_by_time:
+        first_cov = [
+            1 if lower_bounds[i] <= true_values[i] <= upper_bounds[i] else 0
+            for i in range(len(plot_steps))
+        ]
+        run_avg = [np.mean(first_cov[:i + 1]) for i in range(len(first_cov))]
+
+        ax.plot(plot_steps, run_avg, color=_C_COV, linewidth=2)
+        ax.set_ylim(0.7, 1.05)
+        ax.axhline(target_coverage, color=_C_TARGET, linestyle="--", linewidth=1.8,
+                   label=f"Target ({target_coverage:.1%})")
+        ax.set_xlabel("Time step $t$", fontsize=10)
+        ax.set_ylabel("Running avg. coverage", fontsize=10)
+        ax.set_title("First Test Series: Running Coverage", fontsize=10)
+        ax.legend(fontsize=9)
+        ax.grid(True, alpha=0.25)
+        ax.text(0.02, 0.05, f"Final: {run_avg[-1]:.1%}",
+                transform=ax.transAxes, fontsize=9,
+                bbox=dict(facecolor="white", alpha=0.7, edgecolor="none"))
+    else:
+        ax.axis("off")
+    _style_ax(ax)
+
+    # ── Plot 5: Interval width for first test series ──────────────────────────
+    ax = axes[1, 1]
+    if 'example_true_values' in results_by_time:
+        first_widths = [upper_bounds[i] - lower_bounds[i]
+                        for i in range(len(plot_steps))]
+        ax.plot(plot_steps, first_widths, color=_C_WIDTH, linewidth=2)
+        ax.set_xlabel("Time step $t$", fontsize=10)
+        ax.set_ylabel("Interval width", fontsize=10)
+        ax.set_title("First Test Series: Interval Width", fontsize=10)
+        ax.grid(True, alpha=0.25)
+        ax.text(0.02, 0.95, f"Mean: {np.mean(first_widths):.3f}",
+                transform=ax.transAxes, fontsize=9,
+                bbox=dict(facecolor="white", alpha=0.7, edgecolor="none"))
+    else:
+        ax.axis("off")
+    _style_ax(ax)
+
+    # ── Plot 6: ACI alpha for first series (algorithm only) ───────────────────
+    ax = axes[1, 2]
+    if predictor_type == "algorithm" and 'example_alpha_levels' in results_by_time:
+        alpha_vals       = results_by_time['example_alpha_levels']
+        plot_steps_alpha = time_steps[:len(alpha_vals)]
+        ax.plot(plot_steps_alpha, alpha_vals, color=_C_ALPHA, linewidth=2)
+        ax.set_ylim(0.0, 1.0)
+        ax.set_xlabel("Time step $t$", fontsize=10)
+        ax.set_ylabel("Alpha level", fontsize=10)
+        ax.set_title("First Test Series: ACI Alpha", fontsize=10)
+        ax.grid(True, alpha=0.25)
+        _style_ax(ax)
+    else:
+        ax.axis("off")
+
+    fig.tight_layout()
+    if save_path:
+        out = Path(save_path)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        fig.savefig(out, dpi=200, bbox_inches="tight")
+        print(f"[Plot] Saved to {out}")
 
 
 def main():
@@ -756,6 +773,7 @@ def main():
     parser.add_argument('--x_trend_shift', type=float, default=None, help='Shifted trend_X for TEST X_t')
     parser.add_argument('--x_noise_std_shift', type=float, default=None, help='Shifted X noise std for TEST')
     parser.add_argument('--x0_lambda_shift', type=float, default=None, help='Shifted Poisson rate for X₀ (TEST)')
+    parser.add_argument('--save_plot', default=None, help='Save figure to this path (PNG or PDF)')
 
     args = parser.parse_args()
 
@@ -900,7 +918,8 @@ def main():
         target_coverage,
         predictor_type=args.predictor,
         covariate_mode=args.covariate_mode,
-        with_shift=args.with_shift
+        with_shift=args.with_shift,
+        save_path=args.save_plot,
     )
 
     # Final assessment

@@ -22,6 +22,7 @@ class AdaptedCAFHT:
         self._test_feat_t = None
         self._t_ctx = None
         self._clf = None
+        self._last_cal_prob1 = None   # prob(test class) on cal set, set by _compute_density_ratio_weights
 
     def reset_adaptation(self):
         self._scores = None
@@ -32,6 +33,7 @@ class AdaptedCAFHT:
         self._test_feat_t = None
         self._t_ctx = None
         self._clf = None
+        self._last_cal_prob1 = None
 
     def fit_ar_model(self, Y_subset):
         n, L, _ = Y_subset.shape
@@ -172,6 +174,7 @@ class AdaptedCAFHT:
 
         eps   = 1e-6
         prob1 = np.clip(prob1, eps, 1.0 - eps)
+        self._last_cal_prob1 = prob1.copy()   # expose for diagnostics
 
         # class_weight='balanced' removes the prior from prob1, so the ratio
         # prob1/(1-prob1) is already a pure likelihood ratio — no prior_ratio

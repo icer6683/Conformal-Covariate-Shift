@@ -1,0 +1,4706 @@
+{
+  "start": "2024-08-01",
+  "end": "2024-09-30",
+  "n_series": 469,
+  "L": 42,
+  "tickers": [
+    "MMM",
+    "AOS",
+    "ABT",
+    "ABBV",
+    "ACN",
+    "ADBE",
+    "AMD",
+    "AES",
+    "AFL",
+    "A",
+    "APD",
+    "ABNB",
+    "AKAM",
+    "ALB",
+    "ARE",
+    "ALGN",
+    "ALLE",
+    "LNT",
+    "ALL",
+    "GOOGL",
+    "GOOG",
+    "MO",
+    "AMZN",
+    "AMCR",
+    "AEE",
+    "AAL",
+    "AEP",
+    "AXP",
+    "AIG",
+    "AMT",
+    "AWK",
+    "AMP",
+    "AME",
+    "AMGN",
+    "APH",
+    "ADI",
+    "AON",
+    "APA",
+    "AAPL",
+    "AMAT",
+    "APTV",
+    "ADM",
+    "ANET",
+    "AJG",
+    "AIZ",
+    "T",
+    "ATO",
+    "ADSK",
+    "ADP",
+    "AZO",
+    "AVB",
+    "AVY",
+    "AXON",
+    "BKR",
+    "BALL",
+    "BAC",
+    "BBWI",
+    "BAX",
+    "BDX",
+    "BRK-B",
+    "BBY",
+    "BIO",
+    "BIIB",
+    "BLK",
+    "BX",
+    "BA",
+    "BWA",
+    "BXP",
+    "BSX",
+    "BMY",
+    "AVGO",
+    "BR",
+    "BF-B",
+    "BLDR",
+    "BG",
+    "CHRW",
+    "CDNS",
+    "CZR",
+    "CPT",
+    "CPB",
+    "COF",
+    "CAH",
+    "KMX",
+    "CCL",
+    "CARR",
+    "CAT",
+    "CBOE",
+    "CBRE",
+    "CDW",
+    "CE",
+    "CNC",
+    "CNP",
+    "CF",
+    "SCHW",
+    "CHTR",
+    "CVX",
+    "CMG",
+    "CB",
+    "CHD",
+    "CI",
+    "CINF",
+    "CTAS",
+    "CSCO",
+    "C",
+    "CFG",
+    "CLX",
+    "CME",
+    "CMS",
+    "KO",
+    "CTSH",
+    "CL",
+    "CMCSA",
+    "CAG",
+    "COP",
+    "ED",
+    "STZ",
+    "CEG",
+    "GLW",
+    "COST",
+    "CTRA",
+    "CCI",
+    "CSX",
+    "CMI",
+    "CVS",
+    "DHI",
+    "DHR",
+    "DRI",
+    "DVA",
+    "DE",
+    "DAL",
+    "XRAY",
+    "DVN",
+    "DXCM",
+    "FANG",
+    "DLR",
+    "DG",
+    "DLTR",
+    "D",
+    "DPZ",
+    "DOV",
+    "DTE",
+    "DUK",
+    "DD",
+    "DXC",
+    "EMN",
+    "ETN",
+    "EBAY",
+    "ECL",
+    "EIX",
+    "EW",
+    "EA",
+    "ELV",
+    "EMR",
+    "ENPH",
+    "ETR",
+    "EOG",
+    "EPAM",
+    "EQT",
+    "EFX",
+    "EQIX",
+    "EQR",
+    "ESS",
+    "EL",
+    "ETSY",
+    "EG",
+    "EVRG",
+    "ES",
+    "EXC",
+    "EXPE",
+    "EXPD",
+    "EXR",
+    "XOM",
+    "FFIV",
+    "FDS",
+    "FICO",
+    "FAST",
+    "FRT",
+    "FDX",
+    "FIS",
+    "FITB",
+    "FSLR",
+    "FE",
+    "FMC",
+    "F",
+    "FTNT",
+    "FTV",
+    "FOXA",
+    "FOX",
+    "BEN",
+    "FCX",
+    "GRMN",
+    "IT",
+    "GEHC",
+    "GEN",
+    "GNRC",
+    "GD",
+    "GE",
+    "GIS",
+    "GM",
+    "GPC",
+    "GILD",
+    "GPN",
+    "GL",
+    "GS",
+    "HAL",
+    "HIG",
+    "HAS",
+    "HCA",
+    "DOC",
+    "HSIC",
+    "HSY",
+    "HPE",
+    "HLT",
+    "HOLX",
+    "HD",
+    "HON",
+    "HRL",
+    "HST",
+    "HWM",
+    "HPQ",
+    "HUM",
+    "HBAN",
+    "HII",
+    "IBM",
+    "IEX",
+    "IDXX",
+    "ITW",
+    "ILMN",
+    "INCY",
+    "IR",
+    "PODD",
+    "INTC",
+    "ICE",
+    "IFF",
+    "IP",
+    "INTU",
+    "ISRG",
+    "IVZ",
+    "INVH",
+    "IQV",
+    "IRM",
+    "JBHT",
+    "JKHY",
+    "JNJ",
+    "JCI",
+    "JPM",
+    "KVUE",
+    "KDP",
+    "KEY",
+    "KEYS",
+    "KMB",
+    "KIM",
+    "KMI",
+    "KKR",
+    "KLAC",
+    "KHC",
+    "KR",
+    "LHX",
+    "LH",
+    "LRCX",
+    "LW",
+    "LVS",
+    "LDOS",
+    "LEN",
+    "LLY",
+    "LIN",
+    "LYV",
+    "LKQ",
+    "LMT",
+    "L",
+    "LOW",
+    "LULU",
+    "LYB",
+    "MTB",
+    "MPC",
+    "MKTX",
+    "MAR",
+    "MLM",
+    "MAS",
+    "MA",
+    "MTCH",
+    "MKC",
+    "MCD",
+    "MCK",
+    "MDT",
+    "MRK",
+    "META",
+    "MET",
+    "MTD",
+    "MGM",
+    "MCHP",
+    "MU",
+    "MSFT",
+    "MAA",
+    "MRNA",
+    "MHK",
+    "MOH",
+    "TAP",
+    "MDLZ",
+    "MPWR",
+    "MNST",
+    "MCO",
+    "MS",
+    "MSI",
+    "MSCI",
+    "NDAQ",
+    "NTAP",
+    "NFLX",
+    "NWL",
+    "NEM",
+    "NWSA",
+    "NWS",
+    "NEE",
+    "NKE",
+    "NI",
+    "NDSN",
+    "NSC",
+    "NTRS",
+    "NOC",
+    "NCLH",
+    "NRG",
+    "NUE",
+    "NVDA",
+    "NVR",
+    "NXPI",
+    "ORLY",
+    "OXY",
+    "ODFL",
+    "OMC",
+    "ON",
+    "OKE",
+    "ORCL",
+    "OTIS",
+    "PCAR",
+    "PKG",
+    "PANW",
+    "PH",
+    "PAYX",
+    "PAYC",
+    "PYPL",
+    "PNR",
+    "PEP",
+    "PFE",
+    "PCG",
+    "PM",
+    "PSX",
+    "PNW",
+    "PNC",
+    "POOL",
+    "PPG",
+    "PPL",
+    "PFG",
+    "PG",
+    "PGR",
+    "PLD",
+    "PRU",
+    "PEG",
+    "PTC",
+    "PSA",
+    "PHM",
+    "QRVO",
+    "QCOM",
+    "PWR",
+    "DGX",
+    "RL",
+    "RJF",
+    "RTX",
+    "O",
+    "REG",
+    "REGN",
+    "RF",
+    "RSG",
+    "RMD",
+    "RHI",
+    "ROK",
+    "ROL",
+    "ROP",
+    "ROST",
+    "RCL",
+    "SPGI",
+    "CRM",
+    "SBAC",
+    "SLB",
+    "STX",
+    "SRE",
+    "NOW",
+    "SHW",
+    "SPG",
+    "SWKS",
+    "SJM",
+    "SNA",
+    "SEDG",
+    "SO",
+    "LUV",
+    "SWK",
+    "SBUX",
+    "STT",
+    "STLD",
+    "STE",
+    "SYK",
+    "SYF",
+    "SNPS",
+    "SYY",
+    "TMUS",
+    "TROW",
+    "TTWO",
+    "TPR",
+    "TRGP",
+    "TGT",
+    "TEL",
+    "TDY",
+    "TFX",
+    "TER",
+    "TSLA",
+    "TXN",
+    "TXT",
+    "TMO",
+    "TJX",
+    "TSCO",
+    "TT",
+    "TDG",
+    "TRV",
+    "TRMB",
+    "TFC",
+    "TYL",
+    "TSN",
+    "USB",
+    "UDR",
+    "ULTA",
+    "UAL",
+    "UPS",
+    "URI",
+    "UNH",
+    "UHS",
+    "UNP",
+    "VLO",
+    "VTR",
+    "VLTO",
+    "VRSN",
+    "VRSK",
+    "VZ",
+    "VRTX",
+    "VFC",
+    "VTRS",
+    "VICI",
+    "V",
+    "VMC",
+    "WAB",
+    "WMT",
+    "WBD",
+    "WM",
+    "WAT",
+    "WEC",
+    "WFC",
+    "WELL",
+    "WST",
+    "DD",
+    "WDC",
+    "WY",
+    "WMB",
+    "WTW",
+    "GWW",
+    "WYNN",
+    "XEL",
+    "XYL",
+    "YUM",
+    "ZBRA",
+    "ZBH",
+    "ZTS"
+  ],
+  "cov_names": [
+    "OvernightGapReturn",
+    "Above52wLowReturn",
+    "TurnoverRatio_lag1",
+    "DailyRangeReturn_lag1"
+  ],
+  "meta": [
+    {
+      "ticker": "MMM",
+      "sector": "Industrials",
+      "industry": "Conglomerates",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "3M Company",
+      "shares_outstanding": 522396178
+    },
+    {
+      "ticker": "AOS",
+      "sector": "Industrials",
+      "industry": "Specialty Industrial Machinery",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "A. O. Smith Corporation",
+      "shares_outstanding": 112376652
+    },
+    {
+      "ticker": "ABT",
+      "sector": "Healthcare",
+      "industry": "Medical Devices",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Abbott Laboratories",
+      "shares_outstanding": 1737674869
+    },
+    {
+      "ticker": "ABBV",
+      "sector": "Healthcare",
+      "industry": "Drug Manufacturers - General",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "AbbVie Inc.",
+      "shares_outstanding": 1768762377
+    },
+    {
+      "ticker": "ACN",
+      "sector": "Technology",
+      "industry": "Information Technology Services",
+      "exchange": "NYQ",
+      "country": "Ireland",
+      "longName": "Accenture plc",
+      "shares_outstanding": 613939268
+    },
+    {
+      "ticker": "ADBE",
+      "sector": "Technology",
+      "industry": "Software - Application",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "Adobe Inc.",
+      "shares_outstanding": 404200000
+    },
+    {
+      "ticker": "AMD",
+      "sector": "Technology",
+      "industry": "Semiconductors",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "Advanced Micro Devices, Inc.",
+      "shares_outstanding": 1630338779
+    },
+    {
+      "ticker": "AES",
+      "sector": "Utilities",
+      "industry": "Utilities - Diversified",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "The AES Corporation",
+      "shares_outstanding": 713071623
+    },
+    {
+      "ticker": "AFL",
+      "sector": "Financial Services",
+      "industry": "Insurance - Life",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Aflac Incorporated",
+      "shares_outstanding": 515183672
+    },
+    {
+      "ticker": "A",
+      "sector": "Healthcare",
+      "industry": "Diagnostics & Research",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Agilent Technologies, Inc.",
+      "shares_outstanding": 282602317
+    },
+    {
+      "ticker": "APD",
+      "sector": "Basic Materials",
+      "industry": "Specialty Chemicals",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Air Products and Chemicals, Inc.",
+      "shares_outstanding": 222656008
+    },
+    {
+      "ticker": "ABNB",
+      "sector": "Consumer Cyclical",
+      "industry": "Travel Services",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "Airbnb, Inc.",
+      "shares_outstanding": 423573275
+    },
+    {
+      "ticker": "AKAM",
+      "sector": "Technology",
+      "industry": "Software - Infrastructure",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "Akamai Technologies, Inc.",
+      "shares_outstanding": 147223048
+    },
+    {
+      "ticker": "ALB",
+      "sector": "Basic Materials",
+      "industry": "Specialty Chemicals",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Albemarle Corporation",
+      "shares_outstanding": 117886887
+    },
+    {
+      "ticker": "ARE",
+      "sector": "Real Estate",
+      "industry": "REIT - Office",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Alexandria Real Estate Equities, Inc.",
+      "shares_outstanding": 173127082
+    },
+    {
+      "ticker": "ALGN",
+      "sector": "Healthcare",
+      "industry": "Medical Instruments & Supplies",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "Align Technology, Inc.",
+      "shares_outstanding": 71617275
+    },
+    {
+      "ticker": "ALLE",
+      "sector": "Industrials",
+      "industry": "Security & Protection Services",
+      "exchange": "NYQ",
+      "country": "Ireland",
+      "longName": "Allegion plc",
+      "shares_outstanding": 86145484
+    },
+    {
+      "ticker": "LNT",
+      "sector": "Utilities",
+      "industry": "Utilities - Regulated Electric",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "Alliant Energy Corporation",
+      "shares_outstanding": 258276483
+    },
+    {
+      "ticker": "ALL",
+      "sector": "Financial Services",
+      "industry": "Insurance - Property & Casualty",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "The Allstate Corporation",
+      "shares_outstanding": 259535842
+    },
+    {
+      "ticker": "GOOGL",
+      "sector": "Communication Services",
+      "industry": "Internet Content & Information",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "Alphabet Inc.",
+      "shares_outstanding": 5822000000
+    },
+    {
+      "ticker": "GOOG",
+      "sector": "Communication Services",
+      "industry": "Internet Content & Information",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "Alphabet Inc.",
+      "shares_outstanding": 5438000000
+    },
+    {
+      "ticker": "MO",
+      "sector": "Consumer Defensive",
+      "industry": "Tobacco",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Altria Group, Inc.",
+      "shares_outstanding": 1671313564
+    },
+    {
+      "ticker": "AMZN",
+      "sector": "Consumer Cyclical",
+      "industry": "Internet Retail",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "Amazon.com, Inc.",
+      "shares_outstanding": 10754251799
+    },
+    {
+      "ticker": "AMCR",
+      "sector": "Consumer Cyclical",
+      "industry": "Packaging & Containers",
+      "exchange": "NYQ",
+      "country": "Switzerland",
+      "longName": "Amcor plc",
+      "shares_outstanding": 462045690
+    },
+    {
+      "ticker": "AEE",
+      "sector": "Utilities",
+      "industry": "Utilities - Regulated Electric",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Ameren Corporation",
+      "shares_outstanding": 276653219
+    },
+    {
+      "ticker": "AAL",
+      "sector": "Industrials",
+      "industry": "Airlines",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "American Airlines Group Inc.",
+      "shares_outstanding": 660304573
+    },
+    {
+      "ticker": "AEP",
+      "sector": "Utilities",
+      "industry": "Utilities - Regulated Electric",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "American Electric Power Company, Inc.",
+      "shares_outstanding": 543563480
+    },
+    {
+      "ticker": "AXP",
+      "sector": "Financial Services",
+      "industry": "Credit Services",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "American Express Company",
+      "shares_outstanding": 685783466
+    },
+    {
+      "ticker": "AIG",
+      "sector": "Financial Services",
+      "industry": "Insurance - Diversified",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "American International Group, Inc.",
+      "shares_outstanding": 534866770
+    },
+    {
+      "ticker": "AMT",
+      "sector": "Real Estate",
+      "industry": "REIT - Specialty",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "American Tower Corporation",
+      "shares_outstanding": 466370068
+    },
+    {
+      "ticker": "AWK",
+      "sector": "Utilities",
+      "industry": "Utilities - Regulated Water",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "American Water Works Company, Inc.",
+      "shares_outstanding": 195280114
+    },
+    {
+      "ticker": "AMP",
+      "sector": "Financial Services",
+      "industry": "Asset Management",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Ameriprise Financial, Inc.",
+      "shares_outstanding": 90689669
+    },
+    {
+      "ticker": "AME",
+      "sector": "Industrials",
+      "industry": "Specialty Industrial Machinery",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "AMETEK, Inc.",
+      "shares_outstanding": 229065429
+    },
+    {
+      "ticker": "AMGN",
+      "sector": "Healthcare",
+      "industry": "Drug Manufacturers - General",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "Amgen Inc.",
+      "shares_outstanding": 539067675
+    },
+    {
+      "ticker": "APH",
+      "sector": "Technology",
+      "industry": "Electronic Components",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Amphenol Corporation",
+      "shares_outstanding": 1229430709
+    },
+    {
+      "ticker": "ADI",
+      "sector": "Technology",
+      "industry": "Semiconductors",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "Analog Devices, Inc.",
+      "shares_outstanding": 488204157
+    },
+    {
+      "ticker": "AON",
+      "sector": "Financial Services",
+      "industry": "Insurance Brokers",
+      "exchange": "NYQ",
+      "country": "Ireland",
+      "longName": "Aon plc",
+      "shares_outstanding": 214500000
+    },
+    {
+      "ticker": "APA",
+      "sector": "Energy",
+      "industry": "Oil & Gas E&P",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "APA Corporation",
+      "shares_outstanding": 353400414
+    },
+    {
+      "ticker": "AAPL",
+      "sector": "Technology",
+      "industry": "Consumer Electronics",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "Apple Inc.",
+      "shares_outstanding": 14681140000
+    },
+    {
+      "ticker": "AMAT",
+      "sector": "Technology",
+      "industry": "Semiconductor Equipment & Materials",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "Applied Materials, Inc.",
+      "shares_outstanding": 793609867
+    },
+    {
+      "ticker": "APTV",
+      "sector": "Consumer Cyclical",
+      "industry": "Auto Parts",
+      "exchange": "NYQ",
+      "country": "Switzerland",
+      "longName": "Aptiv PLC",
+      "shares_outstanding": 213141325
+    },
+    {
+      "ticker": "ADM",
+      "sector": "Consumer Defensive",
+      "industry": "Farm Products",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Archer-Daniels-Midland Company",
+      "shares_outstanding": 481895100
+    },
+    {
+      "ticker": "ANET",
+      "sector": "Technology",
+      "industry": "Computer Hardware",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Arista Networks, Inc.",
+      "shares_outstanding": 1256537906
+    },
+    {
+      "ticker": "AJG",
+      "sector": "Financial Services",
+      "industry": "Insurance Brokers",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Arthur J. Gallagher & Co.",
+      "shares_outstanding": 256888062
+    },
+    {
+      "ticker": "AIZ",
+      "sector": "Financial Services",
+      "industry": "Insurance - Property & Casualty",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Assurant, Inc.",
+      "shares_outstanding": 49699769
+    },
+    {
+      "ticker": "T",
+      "sector": "Communication Services",
+      "industry": "Telecom Services",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "AT&T Inc.",
+      "shares_outstanding": 6982145528
+    },
+    {
+      "ticker": "ATO",
+      "sector": "Utilities",
+      "industry": "Utilities - Regulated Gas",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Atmos Energy Corporation",
+      "shares_outstanding": 165438946
+    },
+    {
+      "ticker": "ADSK",
+      "sector": "Technology",
+      "industry": "Software - Application",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "Autodesk, Inc.",
+      "shares_outstanding": 211000000
+    },
+    {
+      "ticker": "ADP",
+      "sector": "Technology",
+      "industry": "Software - Application",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "Automatic Data Processing, Inc.",
+      "shares_outstanding": 402644364
+    },
+    {
+      "ticker": "AZO",
+      "sector": "Consumer Cyclical",
+      "industry": "Auto Parts",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "AutoZone, Inc.",
+      "shares_outstanding": 16476820
+    },
+    {
+      "ticker": "AVB",
+      "sector": "Real Estate",
+      "industry": "REIT - Residential",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "AvalonBay Communities, Inc.",
+      "shares_outstanding": 139111236
+    },
+    {
+      "ticker": "AVY",
+      "sector": "Consumer Cyclical",
+      "industry": "Packaging & Containers",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Avery Dennison Corporation",
+      "shares_outstanding": 76917031
+    },
+    {
+      "ticker": "AXON",
+      "sector": "Industrials",
+      "industry": "Aerospace & Defense",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "Axon Enterprise, Inc.",
+      "shares_outstanding": 80397675
+    },
+    {
+      "ticker": "BKR",
+      "sector": "Energy",
+      "industry": "Oil & Gas Equipment & Services",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "Baker Hughes Company",
+      "shares_outstanding": 991757347
+    },
+    {
+      "ticker": "BALL",
+      "sector": "Consumer Cyclical",
+      "industry": "Packaging & Containers",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Ball Corporation",
+      "shares_outstanding": 266153058
+    },
+    {
+      "ticker": "BAC",
+      "sector": "Financial Services",
+      "industry": "Banks - Diversified",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Bank of America Corporation",
+      "shares_outstanding": 7145709181
+    },
+    {
+      "ticker": "BBWI",
+      "sector": "Consumer Cyclical",
+      "industry": "Specialty Retail",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Bath & Body Works, Inc.",
+      "shares_outstanding": 201134265
+    },
+    {
+      "ticker": "BAX",
+      "sector": "Healthcare",
+      "industry": "Medical Instruments & Supplies",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Baxter International Inc.",
+      "shares_outstanding": 516252514
+    },
+    {
+      "ticker": "BDX",
+      "sector": "Healthcare",
+      "industry": "Medical Instruments & Supplies",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Becton, Dickinson and Company",
+      "shares_outstanding": 284466650
+    },
+    {
+      "ticker": "BRK-B",
+      "sector": "Financial Services",
+      "industry": "Insurance - Diversified",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Berkshire Hathaway Inc.",
+      "shares_outstanding": 1390722404
+    },
+    {
+      "ticker": "BBY",
+      "sector": "Consumer Cyclical",
+      "industry": "Specialty Retail",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Best Buy Co., Inc.",
+      "shares_outstanding": 209112577
+    },
+    {
+      "ticker": "BIO",
+      "sector": "Healthcare",
+      "industry": "Medical Devices",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Bio-Rad Laboratories, Inc.",
+      "shares_outstanding": 21924404
+    },
+    {
+      "ticker": "BIIB",
+      "sector": "Healthcare",
+      "industry": "Drug Manufacturers - General",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "Biogen Inc.",
+      "shares_outstanding": 146758528
+    },
+    {
+      "ticker": "BLK",
+      "sector": "Financial Services",
+      "industry": "Asset Management",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "BlackRock, Inc.",
+      "shares_outstanding": 155541536
+    },
+    {
+      "ticker": "BX",
+      "sector": "Financial Services",
+      "industry": "Asset Management",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Blackstone Inc.",
+      "shares_outstanding": 742180737
+    },
+    {
+      "ticker": "BA",
+      "sector": "Industrials",
+      "industry": "Aerospace & Defense",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "The Boeing Company",
+      "shares_outstanding": 785844140
+    },
+    {
+      "ticker": "BWA",
+      "sector": "Consumer Cyclical",
+      "industry": "Auto Parts",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "BorgWarner Inc.",
+      "shares_outstanding": 206061488
+    },
+    {
+      "ticker": "BXP",
+      "sector": "Real Estate",
+      "industry": "REIT - Office",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "BXP, Inc.",
+      "shares_outstanding": 158629124
+    },
+    {
+      "ticker": "BSX",
+      "sector": "Healthcare",
+      "industry": "Medical Devices",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Boston Scientific Corporation",
+      "shares_outstanding": 1486175167
+    },
+    {
+      "ticker": "BMY",
+      "sector": "Healthcare",
+      "industry": "Drug Manufacturers - General",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Bristol-Myers Squibb Company",
+      "shares_outstanding": 2041735455
+    },
+    {
+      "ticker": "AVGO",
+      "sector": "Technology",
+      "industry": "Semiconductors",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "Broadcom Inc.",
+      "shares_outstanding": 4734668184
+    },
+    {
+      "ticker": "BR",
+      "sector": "Technology",
+      "industry": "Information Technology Services",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Broadridge Financial Solutions, Inc.",
+      "shares_outstanding": 116748715
+    },
+    {
+      "ticker": "BF-B",
+      "sector": "Consumer Defensive",
+      "industry": "Beverages - Wineries & Distilleries",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Brown-Forman Corporation",
+      "shares_outstanding": 290262390
+    },
+    {
+      "ticker": "BLDR",
+      "sector": "Industrials",
+      "industry": "Building Products & Equipment",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Builders FirstSource, Inc.",
+      "shares_outstanding": 107515372
+    },
+    {
+      "ticker": "BG",
+      "sector": "Consumer Defensive",
+      "industry": "Farm Products",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Bunge Global SA",
+      "shares_outstanding": 193509080
+    },
+    {
+      "ticker": "CHRW",
+      "sector": "Industrials",
+      "industry": "Integrated Freight & Logistics",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "C.H. Robinson Worldwide, Inc.",
+      "shares_outstanding": 117850413
+    },
+    {
+      "ticker": "CDNS",
+      "sector": "Technology",
+      "industry": "Software - Application",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "Cadence Design Systems, Inc.",
+      "shares_outstanding": 276092068
+    },
+    {
+      "ticker": "CZR",
+      "sector": "Consumer Cyclical",
+      "industry": "Resorts & Casinos",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "Caesars Entertainment, Inc.",
+      "shares_outstanding": 203521021
+    },
+    {
+      "ticker": "CPT",
+      "sector": "Real Estate",
+      "industry": "REIT - Residential",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Camden Property Trust",
+      "shares_outstanding": 104726511
+    },
+    {
+      "ticker": "CPB",
+      "sector": "Consumer Defensive",
+      "industry": "Packaged Foods",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "The Campbell's Company",
+      "shares_outstanding": 298146488
+    },
+    {
+      "ticker": "COF",
+      "sector": "Financial Services",
+      "industry": "Credit Services",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Capital One Financial Corporation",
+      "shares_outstanding": 621925120
+    },
+    {
+      "ticker": "CAH",
+      "sector": "Healthcare",
+      "industry": "Medical Distribution",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Cardinal Health, Inc.",
+      "shares_outstanding": 235316016
+    },
+    {
+      "ticker": "KMX",
+      "sector": "Consumer Cyclical",
+      "industry": "Auto & Truck Dealerships",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "CarMax, Inc.",
+      "shares_outstanding": 141796641
+    },
+    {
+      "ticker": "CCL",
+      "sector": "Consumer Cyclical",
+      "industry": "Travel Services",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Carnival Corporation & plc",
+      "shares_outstanding": 1239000212
+    },
+    {
+      "ticker": "CARR",
+      "sector": "Industrials",
+      "industry": "Building Products & Equipment",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Carrier Global Corporation",
+      "shares_outstanding": 835433325
+    },
+    {
+      "ticker": "CAT",
+      "sector": "Industrials",
+      "industry": "Farm & Heavy Construction Machinery",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Caterpillar Inc.",
+      "shares_outstanding": 465287332
+    },
+    {
+      "ticker": "CBOE",
+      "sector": "Financial Services",
+      "industry": "Financial Data & Stock Exchanges",
+      "exchange": "BTS",
+      "country": "United States",
+      "longName": "Cboe Global Markets, Inc.",
+      "shares_outstanding": 104742273
+    },
+    {
+      "ticker": "CBRE",
+      "sector": "Real Estate",
+      "industry": "Real Estate Services",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "CBRE Group, Inc.",
+      "shares_outstanding": 293140748
+    },
+    {
+      "ticker": "CDW",
+      "sector": "Technology",
+      "industry": "Information Technology Services",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "CDW Corporation",
+      "shares_outstanding": 128993588
+    },
+    {
+      "ticker": "CE",
+      "sector": "Basic Materials",
+      "industry": "Chemicals",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Celanese Corporation",
+      "shares_outstanding": 111922758
+    },
+    {
+      "ticker": "CNC",
+      "sector": "Healthcare",
+      "industry": "Healthcare Plans",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Centene Corporation",
+      "shares_outstanding": 491772493
+    },
+    {
+      "ticker": "CNP",
+      "sector": "Utilities",
+      "industry": "Utilities - Regulated Electric",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "CenterPoint Energy, Inc.",
+      "shares_outstanding": 654163245
+    },
+    {
+      "ticker": "CF",
+      "sector": "Basic Materials",
+      "industry": "Agricultural Inputs",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "CF Industries Holdings, Inc.",
+      "shares_outstanding": 153616434
+    },
+    {
+      "ticker": "SCHW",
+      "sector": "Financial Services",
+      "industry": "Capital Markets",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "The Charles Schwab Corporation",
+      "shares_outstanding": 1738099441
+    },
+    {
+      "ticker": "CHTR",
+      "sector": "Communication Services",
+      "industry": "Telecom Services",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "Charter Communications, Inc.",
+      "shares_outstanding": 124637812
+    },
+    {
+      "ticker": "CVX",
+      "sector": "Energy",
+      "industry": "Oil & Gas Integrated",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Chevron Corporation",
+      "shares_outstanding": 1991898801
+    },
+    {
+      "ticker": "CMG",
+      "sector": "Consumer Cyclical",
+      "industry": "Restaurants",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Chipotle Mexican Grill, Inc.",
+      "shares_outstanding": 1302423000
+    },
+    {
+      "ticker": "CB",
+      "sector": "Financial Services",
+      "industry": "Insurance - Property & Casualty",
+      "exchange": "NYQ",
+      "country": "Switzerland",
+      "longName": "Chubb Limited",
+      "shares_outstanding": 388489214
+    },
+    {
+      "ticker": "CHD",
+      "sector": "Consumer Defensive",
+      "industry": "Household & Personal Products",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Church & Dwight Co., Inc.",
+      "shares_outstanding": 236875094
+    },
+    {
+      "ticker": "CI",
+      "sector": "Healthcare",
+      "industry": "Healthcare Plans",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "The Cigna Group",
+      "shares_outstanding": 263660761
+    },
+    {
+      "ticker": "CINF",
+      "sector": "Financial Services",
+      "industry": "Insurance - Property & Casualty",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "Cincinnati Financial Corporation",
+      "shares_outstanding": 155686200
+    },
+    {
+      "ticker": "CTAS",
+      "sector": "Industrials",
+      "industry": "Specialty Business Services",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "Cintas Corporation",
+      "shares_outstanding": 400087119
+    },
+    {
+      "ticker": "CSCO",
+      "sector": "Technology",
+      "industry": "Communication Equipment",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "Cisco Systems, Inc.",
+      "shares_outstanding": 3949893042
+    },
+    {
+      "ticker": "C",
+      "sector": "Financial Services",
+      "industry": "Banks - Diversified",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Citigroup Inc.",
+      "shares_outstanding": 1714907450
+    },
+    {
+      "ticker": "CFG",
+      "sector": "Financial Services",
+      "industry": "Banks - Regional",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Citizens Financial Group, Inc.",
+      "shares_outstanding": 424993893
+    },
+    {
+      "ticker": "CLX",
+      "sector": "Consumer Defensive",
+      "industry": "Household & Personal Products",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "The Clorox Company",
+      "shares_outstanding": 120911863
+    },
+    {
+      "ticker": "CME",
+      "sector": "Financial Services",
+      "industry": "Financial Data & Stock Exchanges",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "CME Group Inc.",
+      "shares_outstanding": 362804943
+    },
+    {
+      "ticker": "CMS",
+      "sector": "Utilities",
+      "industry": "Utilities - Regulated Electric",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "CMS Energy Corporation",
+      "shares_outstanding": 307996655
+    },
+    {
+      "ticker": "KO",
+      "sector": "Consumer Defensive",
+      "industry": "Beverages - Non-Alcoholic",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "The Coca-Cola Company",
+      "shares_outstanding": 4304152877
+    },
+    {
+      "ticker": "CTSH",
+      "sector": "Technology",
+      "industry": "Information Technology Services",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "Cognizant Technology Solutions Corporation",
+      "shares_outstanding": 478246920
+    },
+    {
+      "ticker": "CL",
+      "sector": "Consumer Defensive",
+      "industry": "Household & Personal Products",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Colgate-Palmolive Company",
+      "shares_outstanding": 802301915
+    },
+    {
+      "ticker": "CMCSA",
+      "sector": "Communication Services",
+      "industry": "Telecom Services",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "Comcast Corporation",
+      "shares_outstanding": 3588401619
+    },
+    {
+      "ticker": "CAG",
+      "sector": "Consumer Defensive",
+      "industry": "Packaged Foods",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Conagra Brands, Inc.",
+      "shares_outstanding": 478437156
+    },
+    {
+      "ticker": "COP",
+      "sector": "Energy",
+      "industry": "Oil & Gas E&P",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "ConocoPhillips",
+      "shares_outstanding": 1218853041
+    },
+    {
+      "ticker": "ED",
+      "sector": "Utilities",
+      "industry": "Utilities - Regulated Electric",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Consolidated Edison, Inc.",
+      "shares_outstanding": 368421246
+    },
+    {
+      "ticker": "STZ",
+      "sector": "Consumer Defensive",
+      "industry": "Beverages - Brewers",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Constellation Brands, Inc.",
+      "shares_outstanding": 173384625
+    },
+    {
+      "ticker": "CEG",
+      "sector": "Utilities",
+      "industry": "Utilities - Independent Power Producers",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "Constellation Energy Corporation",
+      "shares_outstanding": 362294672
+    },
+    {
+      "ticker": "GLW",
+      "sector": "Technology",
+      "industry": "Electronic Components",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Corning Incorporated",
+      "shares_outstanding": 859014837
+    },
+    {
+      "ticker": "COST",
+      "sector": "Consumer Defensive",
+      "industry": "Discount Stores",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "Costco Wholesale Corporation",
+      "shares_outstanding": 443652540
+    },
+    {
+      "ticker": "CTRA",
+      "sector": "Energy",
+      "industry": "Oil & Gas E&P",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Coterra Energy Inc.",
+      "shares_outstanding": 759352619
+    },
+    {
+      "ticker": "CCI",
+      "sector": "Real Estate",
+      "industry": "REIT - Specialty",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Crown Castle Inc.",
+      "shares_outstanding": 436367346
+    },
+    {
+      "ticker": "CSX",
+      "sector": "Industrials",
+      "industry": "Railroads",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "CSX Corporation",
+      "shares_outstanding": 1859992927
+    },
+    {
+      "ticker": "CMI",
+      "sector": "Industrials",
+      "industry": "Specialty Industrial Machinery",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Cummins Inc.",
+      "shares_outstanding": 138257420
+    },
+    {
+      "ticker": "CVS",
+      "sector": "Healthcare",
+      "industry": "Healthcare Plans",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "CVS Health Corporation",
+      "shares_outstanding": 1281604403
+    },
+    {
+      "ticker": "DHI",
+      "sector": "Consumer Cyclical",
+      "industry": "Residential Construction",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "D.R. Horton, Inc.",
+      "shares_outstanding": 290498069
+    },
+    {
+      "ticker": "DHR",
+      "sector": "Healthcare",
+      "industry": "Diagnostics & Research",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Danaher Corporation",
+      "shares_outstanding": 707699419
+    },
+    {
+      "ticker": "DRI",
+      "sector": "Consumer Cyclical",
+      "industry": "Restaurants",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Darden Restaurants, Inc.",
+      "shares_outstanding": 114535003
+    },
+    {
+      "ticker": "DVA",
+      "sector": "Healthcare",
+      "industry": "Medical Care Facilities",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "DaVita Inc.",
+      "shares_outstanding": 66849000
+    },
+    {
+      "ticker": "DE",
+      "sector": "Industrials",
+      "industry": "Farm & Heavy Construction Machinery",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Deere & Company",
+      "shares_outstanding": 270107282
+    },
+    {
+      "ticker": "DAL",
+      "sector": "Industrials",
+      "industry": "Airlines",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Delta Air Lines, Inc.",
+      "shares_outstanding": 656994112
+    },
+    {
+      "ticker": "XRAY",
+      "sector": "Healthcare",
+      "industry": "Medical Instruments & Supplies",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "DENTSPLY SIRONA Inc.",
+      "shares_outstanding": 199749333
+    },
+    {
+      "ticker": "DVN",
+      "sector": "Energy",
+      "industry": "Oil & Gas E&P",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Devon Energy Corporation",
+      "shares_outstanding": 621440299
+    },
+    {
+      "ticker": "DXCM",
+      "sector": "Healthcare",
+      "industry": "Medical Devices",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "DexCom, Inc.",
+      "shares_outstanding": 384864842
+    },
+    {
+      "ticker": "FANG",
+      "sector": "Energy",
+      "industry": "Oil & Gas E&P",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "Diamondback Energy, Inc.",
+      "shares_outstanding": 281311730
+    },
+    {
+      "ticker": "DLR",
+      "sector": "Real Estate",
+      "industry": "REIT - Specialty",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Digital Realty Trust, Inc.",
+      "shares_outstanding": 343615444
+    },
+    {
+      "ticker": "DG",
+      "sector": "Consumer Defensive",
+      "industry": "Discount Stores",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Dollar General Corporation",
+      "shares_outstanding": 220226320
+    },
+    {
+      "ticker": "DLTR",
+      "sector": "Consumer Defensive",
+      "industry": "Discount Stores",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "Dollar Tree, Inc.",
+      "shares_outstanding": 197298217
+    },
+    {
+      "ticker": "D",
+      "sector": "Utilities",
+      "industry": "Utilities - Regulated Electric",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Dominion Energy, Inc.",
+      "shares_outstanding": 878964717
+    },
+    {
+      "ticker": "DPZ",
+      "sector": "Consumer Cyclical",
+      "industry": "Restaurants",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "Domino's Pizza, Inc.",
+      "shares_outstanding": 33625700
+    },
+    {
+      "ticker": "DOV",
+      "sector": "Industrials",
+      "industry": "Specialty Industrial Machinery",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Dover Corporation",
+      "shares_outstanding": 134796450
+    },
+    {
+      "ticker": "DTE",
+      "sector": "Utilities",
+      "industry": "Utilities - Regulated Electric",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "DTE Energy Company",
+      "shares_outstanding": 208028117
+    },
+    {
+      "ticker": "DUK",
+      "sector": "Utilities",
+      "industry": "Utilities - Regulated Electric",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Duke Energy Corporation",
+      "shares_outstanding": 778216672
+    },
+    {
+      "ticker": "DD",
+      "sector": "Basic Materials",
+      "industry": "Specialty Chemicals",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "DuPont de Nemours, Inc.",
+      "shares_outstanding": 408923857
+    },
+    {
+      "ticker": "DXC",
+      "sector": "Technology",
+      "industry": "Information Technology Services",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "DXC Technology Company",
+      "shares_outstanding": 169759963
+    },
+    {
+      "ticker": "EMN",
+      "sector": "Basic Materials",
+      "industry": "Specialty Chemicals",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Eastman Chemical Company",
+      "shares_outstanding": 114349911
+    },
+    {
+      "ticker": "ETN",
+      "sector": "Industrials",
+      "industry": "Specialty Industrial Machinery",
+      "exchange": "NYQ",
+      "country": "Ireland",
+      "longName": "Eaton Corporation plc",
+      "shares_outstanding": 387985340
+    },
+    {
+      "ticker": "EBAY",
+      "sector": "Consumer Cyclical",
+      "industry": "Internet Retail",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "eBay Inc.",
+      "shares_outstanding": 448000000
+    },
+    {
+      "ticker": "ECL",
+      "sector": "Basic Materials",
+      "industry": "Specialty Chemicals",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Ecolab Inc.",
+      "shares_outstanding": 282423768
+    },
+    {
+      "ticker": "EIX",
+      "sector": "Utilities",
+      "industry": "Utilities - Regulated Electric",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Edison International",
+      "shares_outstanding": 384905951
+    },
+    {
+      "ticker": "EW",
+      "sector": "Healthcare",
+      "industry": "Medical Devices",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Edwards Lifesciences Corporation",
+      "shares_outstanding": 576541693
+    },
+    {
+      "ticker": "EA",
+      "sector": "Communication Services",
+      "industry": "Electronic Gaming & Multimedia",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "Electronic Arts Inc.",
+      "shares_outstanding": 250253713
+    },
+    {
+      "ticker": "ELV",
+      "sector": "Healthcare",
+      "industry": "Healthcare Plans",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Elevance Health, Inc.",
+      "shares_outstanding": 219664888
+    },
+    {
+      "ticker": "EMR",
+      "sector": "Industrials",
+      "industry": "Specialty Industrial Machinery",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Emerson Electric Co.",
+      "shares_outstanding": 562000000
+    },
+    {
+      "ticker": "ENPH",
+      "sector": "Technology",
+      "industry": "Solar",
+      "exchange": "NGM",
+      "country": "United States",
+      "longName": "Enphase Energy, Inc.",
+      "shares_outstanding": 131783945
+    },
+    {
+      "ticker": "ETR",
+      "sector": "Utilities",
+      "industry": "Utilities - Regulated Electric",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Entergy Corporation",
+      "shares_outstanding": 457798633
+    },
+    {
+      "ticker": "EOG",
+      "sector": "Energy",
+      "industry": "Oil & Gas E&P",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "EOG Resources, Inc.",
+      "shares_outstanding": 535715814
+    },
+    {
+      "ticker": "EPAM",
+      "sector": "Technology",
+      "industry": "Information Technology Services",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "EPAM Systems, Inc.",
+      "shares_outstanding": 52756846
+    },
+    {
+      "ticker": "EQT",
+      "sector": "Energy",
+      "industry": "Oil & Gas E&P",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "EQT Corporation",
+      "shares_outstanding": 624274000
+    },
+    {
+      "ticker": "EFX",
+      "sector": "Industrials",
+      "industry": "Consulting Services",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Equifax Inc.",
+      "shares_outstanding": 120634597
+    },
+    {
+      "ticker": "EQIX",
+      "sector": "Real Estate",
+      "industry": "REIT - Specialty",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "Equinix, Inc.",
+      "shares_outstanding": 98623487
+    },
+    {
+      "ticker": "EQR",
+      "sector": "Real Estate",
+      "industry": "REIT - Residential",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Equity Residential",
+      "shares_outstanding": 377547108
+    },
+    {
+      "ticker": "ESS",
+      "sector": "Real Estate",
+      "industry": "REIT - Residential",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Essex Property Trust, Inc.",
+      "shares_outstanding": 64477129
+    },
+    {
+      "ticker": "EL",
+      "sector": "Consumer Defensive",
+      "industry": "Household & Personal Products",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "The Est\u00e9e Lauder Companies Inc.",
+      "shares_outstanding": 247219699
+    },
+    {
+      "ticker": "ETSY",
+      "sector": "Consumer Cyclical",
+      "industry": "Internet Retail",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Etsy, Inc.",
+      "shares_outstanding": 96247180
+    },
+    {
+      "ticker": "EG",
+      "sector": "Financial Services",
+      "industry": "Insurance - Reinsurance",
+      "exchange": "NYQ",
+      "country": "Bermuda",
+      "longName": "Everest Group, Ltd.",
+      "shares_outstanding": 40390151
+    },
+    {
+      "ticker": "EVRG",
+      "sector": "Utilities",
+      "industry": "Utilities - Regulated Electric",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "Evergy, Inc.",
+      "shares_outstanding": 230284149
+    },
+    {
+      "ticker": "ES",
+      "sector": "Utilities",
+      "industry": "Utilities - Regulated Electric",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Eversource Energy",
+      "shares_outstanding": 375845345
+    },
+    {
+      "ticker": "EXC",
+      "sector": "Utilities",
+      "industry": "Utilities - Regulated Electric",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "Exelon Corporation",
+      "shares_outstanding": 1023175091
+    },
+    {
+      "ticker": "EXPE",
+      "sector": "Consumer Cyclical",
+      "industry": "Travel Services",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "Expedia Group, Inc.",
+      "shares_outstanding": 117011421
+    },
+    {
+      "ticker": "EXPD",
+      "sector": "Industrials",
+      "industry": "Integrated Freight & Logistics",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Expeditors International of Washington, Inc.",
+      "shares_outstanding": 132984007
+    },
+    {
+      "ticker": "EXR",
+      "sector": "Real Estate",
+      "industry": "REIT - Industrial",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Extra Space Storage Inc.",
+      "shares_outstanding": 211197320
+    },
+    {
+      "ticker": "XOM",
+      "sector": "Energy",
+      "industry": "Oil & Gas Integrated",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Exxon Mobil Corporation",
+      "shares_outstanding": 4156559415
+    },
+    {
+      "ticker": "FFIV",
+      "sector": "Technology",
+      "industry": "Software - Infrastructure",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "F5, Inc.",
+      "shares_outstanding": 56519273
+    },
+    {
+      "ticker": "FDS",
+      "sector": "Financial Services",
+      "industry": "Financial Data & Stock Exchanges",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "FactSet Research Systems Inc.",
+      "shares_outstanding": 36431127
+    },
+    {
+      "ticker": "FICO",
+      "sector": "Technology",
+      "industry": "Software - Application",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Fair Isaac Corporation",
+      "shares_outstanding": 23722134
+    },
+    {
+      "ticker": "FAST",
+      "sector": "Industrials",
+      "industry": "Industrial Distribution",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "Fastenal Company",
+      "shares_outstanding": 1148328513
+    },
+    {
+      "ticker": "FRT",
+      "sector": "Real Estate",
+      "industry": "REIT - Retail",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Federal Realty Investment Trust",
+      "shares_outstanding": 86388213
+    },
+    {
+      "ticker": "FDX",
+      "sector": "Industrials",
+      "industry": "Integrated Freight & Logistics",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "FedEx Corporation",
+      "shares_outstanding": 238606756
+    },
+    {
+      "ticker": "FIS",
+      "sector": "Technology",
+      "industry": "Information Technology Services",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Fidelity National Information Services, Inc.",
+      "shares_outstanding": 514403688
+    },
+    {
+      "ticker": "FITB",
+      "sector": "Financial Services",
+      "industry": "Banks - Regional",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "Fifth Third Bancorp",
+      "shares_outstanding": 905563498
+    },
+    {
+      "ticker": "FSLR",
+      "sector": "Technology",
+      "industry": "Solar",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "First Solar, Inc.",
+      "shares_outstanding": 107450760
+    },
+    {
+      "ticker": "FE",
+      "sector": "Utilities",
+      "industry": "Utilities - Regulated Electric",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "FirstEnergy Corp.",
+      "shares_outstanding": 578398650
+    },
+    {
+      "ticker": "FMC",
+      "sector": "Basic Materials",
+      "industry": "Agricultural Inputs",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "FMC Corporation",
+      "shares_outstanding": 125045033
+    },
+    {
+      "ticker": "F",
+      "sector": "Consumer Cyclical",
+      "industry": "Auto Manufacturers",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Ford Motor Company",
+      "shares_outstanding": 3940230185
+    },
+    {
+      "ticker": "FTNT",
+      "sector": "Technology",
+      "industry": "Software - Infrastructure",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "Fortinet, Inc.",
+      "shares_outstanding": 739923583
+    },
+    {
+      "ticker": "FTV",
+      "sector": "Technology",
+      "industry": "Scientific & Technical Instruments",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Fortive Corporation",
+      "shares_outstanding": 307859190
+    },
+    {
+      "ticker": "FOXA",
+      "sector": "Communication Services",
+      "industry": "Entertainment",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "Fox Corporation",
+      "shares_outstanding": 200693856
+    },
+    {
+      "ticker": "FOX",
+      "sector": "Communication Services",
+      "industry": "Entertainment",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "Fox Corporation",
+      "shares_outstanding": 224702222
+    },
+    {
+      "ticker": "BEN",
+      "sector": "Financial Services",
+      "industry": "Asset Management",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Franklin Resources, Inc.",
+      "shares_outstanding": 520763448
+    },
+    {
+      "ticker": "FCX",
+      "sector": "Basic Materials",
+      "industry": "Copper",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Freeport-McMoRan Inc.",
+      "shares_outstanding": 1437201606
+    },
+    {
+      "ticker": "GRMN",
+      "sector": "Technology",
+      "industry": "Scientific & Technical Instruments",
+      "exchange": "NYQ",
+      "country": "Switzerland",
+      "longName": "Garmin Ltd.",
+      "shares_outstanding": 192480830
+    },
+    {
+      "ticker": "IT",
+      "sector": "Technology",
+      "industry": "Information Technology Services",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Gartner, Inc.",
+      "shares_outstanding": 70450294
+    },
+    {
+      "ticker": "GEHC",
+      "sector": "Healthcare",
+      "industry": "Medical Devices",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "GE HealthCare Technologies Inc.",
+      "shares_outstanding": 456290143
+    },
+    {
+      "ticker": "GEN",
+      "sector": "Technology",
+      "industry": "Software - Infrastructure",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "Gen Digital Inc.",
+      "shares_outstanding": 605663774
+    },
+    {
+      "ticker": "GNRC",
+      "sector": "Industrials",
+      "industry": "Specialty Industrial Machinery",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Generac Holdings Inc.",
+      "shares_outstanding": 58675827
+    },
+    {
+      "ticker": "GD",
+      "sector": "Industrials",
+      "industry": "Aerospace & Defense",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "General Dynamics Corporation",
+      "shares_outstanding": 270845862
+    },
+    {
+      "ticker": "GE",
+      "sector": "Industrials",
+      "industry": "Aerospace & Defense",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "GE Aerospace",
+      "shares_outstanding": 1044829602
+    },
+    {
+      "ticker": "GIS",
+      "sector": "Consumer Defensive",
+      "industry": "Packaged Foods",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "General Mills, Inc.",
+      "shares_outstanding": 533681218
+    },
+    {
+      "ticker": "GM",
+      "sector": "Consumer Cyclical",
+      "industry": "Auto Manufacturers",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "General Motors Company",
+      "shares_outstanding": 903967853
+    },
+    {
+      "ticker": "GPC",
+      "sector": "Consumer Cyclical",
+      "industry": "Auto Parts",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Genuine Parts Company",
+      "shares_outstanding": 139122108
+    },
+    {
+      "ticker": "GILD",
+      "sector": "Healthcare",
+      "industry": "Drug Manufacturers - General",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "Gilead Sciences, Inc.",
+      "shares_outstanding": 1241203736
+    },
+    {
+      "ticker": "GPN",
+      "sector": "Industrials",
+      "industry": "Specialty Business Services",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Global Payments Inc.",
+      "shares_outstanding": 275243013
+    },
+    {
+      "ticker": "GL",
+      "sector": "Financial Services",
+      "industry": "Insurance - Life",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Globe Life Inc.",
+      "shares_outstanding": 78444555
+    },
+    {
+      "ticker": "GS",
+      "sector": "Financial Services",
+      "industry": "Capital Markets",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "The Goldman Sachs Group, Inc.",
+      "shares_outstanding": 294993942
+    },
+    {
+      "ticker": "HAL",
+      "sector": "Energy",
+      "industry": "Oil & Gas Equipment & Services",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Halliburton Company",
+      "shares_outstanding": 835157457
+    },
+    {
+      "ticker": "HIG",
+      "sector": "Financial Services",
+      "industry": "Insurance - Diversified",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "The Hartford Insurance Group, Inc.",
+      "shares_outstanding": 275021182
+    },
+    {
+      "ticker": "HAS",
+      "sector": "Consumer Cyclical",
+      "industry": "Leisure",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "Hasbro, Inc.",
+      "shares_outstanding": 140685758
+    },
+    {
+      "ticker": "HCA",
+      "sector": "Healthcare",
+      "industry": "Medical Care Facilities",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "HCA Healthcare, Inc.",
+      "shares_outstanding": 223568966
+    },
+    {
+      "ticker": "DOC",
+      "sector": "Real Estate",
+      "industry": "REIT - Healthcare Facilities",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Healthpeak Properties, Inc.",
+      "shares_outstanding": 695256660
+    },
+    {
+      "ticker": "HSIC",
+      "sector": "Healthcare",
+      "industry": "Medical Distribution",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "Henry Schein, Inc.",
+      "shares_outstanding": 114748051
+    },
+    {
+      "ticker": "HSY",
+      "sector": "Consumer Defensive",
+      "industry": "Confectioners",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "The Hershey Company",
+      "shares_outstanding": 148077438
+    },
+    {
+      "ticker": "HPE",
+      "sector": "Technology",
+      "industry": "Communication Equipment",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Hewlett Packard Enterprise Company",
+      "shares_outstanding": 1326854089
+    },
+    {
+      "ticker": "HLT",
+      "sector": "Consumer Cyclical",
+      "industry": "Lodging",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Hilton Worldwide Holdings Inc.",
+      "shares_outstanding": 228795935
+    },
+    {
+      "ticker": "HOLX",
+      "sector": "Healthcare",
+      "industry": "Medical Instruments & Supplies",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "Hologic, Inc.",
+      "shares_outstanding": 223244905
+    },
+    {
+      "ticker": "HD",
+      "sector": "Consumer Cyclical",
+      "industry": "Home Improvement Retail",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "The Home Depot, Inc.",
+      "shares_outstanding": 996027658
+    },
+    {
+      "ticker": "HON",
+      "sector": "Industrials",
+      "industry": "Conglomerates",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "Honeywell International Inc.",
+      "shares_outstanding": 635675701
+    },
+    {
+      "ticker": "HRL",
+      "sector": "Consumer Defensive",
+      "industry": "Packaged Foods",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Hormel Foods Corporation",
+      "shares_outstanding": 550284207
+    },
+    {
+      "ticker": "HST",
+      "sector": "Real Estate",
+      "industry": "REIT - Hotel & Motel",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "Host Hotels & Resorts, Inc.",
+      "shares_outstanding": 687333299
+    },
+    {
+      "ticker": "HWM",
+      "sector": "Industrials",
+      "industry": "Aerospace & Defense",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Howmet Aerospace Inc.",
+      "shares_outstanding": 400713557
+    },
+    {
+      "ticker": "HPQ",
+      "sector": "Technology",
+      "industry": "Computer Hardware",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "HP Inc.",
+      "shares_outstanding": 914550199
+    },
+    {
+      "ticker": "HUM",
+      "sector": "Healthcare",
+      "industry": "Healthcare Plans",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Humana Inc.",
+      "shares_outstanding": 120054462
+    },
+    {
+      "ticker": "HBAN",
+      "sector": "Financial Services",
+      "industry": "Banks - Regional",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "Huntington Bancshares Incorporated",
+      "shares_outstanding": 2037119660
+    },
+    {
+      "ticker": "HII",
+      "sector": "Industrials",
+      "industry": "Aerospace & Defense",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Huntington Ingalls Industries, Inc.",
+      "shares_outstanding": 39377171
+    },
+    {
+      "ticker": "IBM",
+      "sector": "Technology",
+      "industry": "Information Technology Services",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "International Business Machines Corporation",
+      "shares_outstanding": 938409072
+    },
+    {
+      "ticker": "IEX",
+      "sector": "Industrials",
+      "industry": "Specialty Industrial Machinery",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "IDEX Corporation",
+      "shares_outstanding": 74202616
+    },
+    {
+      "ticker": "IDXX",
+      "sector": "Healthcare",
+      "industry": "Diagnostics & Research",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "IDEXX Laboratories, Inc.",
+      "shares_outstanding": 79424539
+    },
+    {
+      "ticker": "ITW",
+      "sector": "Industrials",
+      "industry": "Specialty Industrial Machinery",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Illinois Tool Works Inc.",
+      "shares_outstanding": 288078076
+    },
+    {
+      "ticker": "ILMN",
+      "sector": "Healthcare",
+      "industry": "Diagnostics & Research",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "Illumina, Inc.",
+      "shares_outstanding": 151906915
+    },
+    {
+      "ticker": "INCY",
+      "sector": "Healthcare",
+      "industry": "Biotechnology",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "Incyte Corporation",
+      "shares_outstanding": 199014486
+    },
+    {
+      "ticker": "IR",
+      "sector": "Industrials",
+      "industry": "Specialty Industrial Machinery",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Ingersoll Rand Inc.",
+      "shares_outstanding": 391617994
+    },
+    {
+      "ticker": "PODD",
+      "sector": "Healthcare",
+      "industry": "Medical Devices",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "Insulet Corporation",
+      "shares_outstanding": 69263714
+    },
+    {
+      "ticker": "INTC",
+      "sector": "Technology",
+      "industry": "Semiconductors",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "Intel Corporation",
+      "shares_outstanding": 5021010228
+    },
+    {
+      "ticker": "ICE",
+      "sector": "Financial Services",
+      "industry": "Financial Data & Stock Exchanges",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Intercontinental Exchange, Inc.",
+      "shares_outstanding": 566430761
+    },
+    {
+      "ticker": "IFF",
+      "sector": "Basic Materials",
+      "industry": "Specialty Chemicals",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "International Flavors & Fragrances Inc.",
+      "shares_outstanding": 255437821
+    },
+    {
+      "ticker": "IP",
+      "sector": "Consumer Cyclical",
+      "industry": "Packaging & Containers",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "International Paper Company",
+      "shares_outstanding": 529486211
+    },
+    {
+      "ticker": "INTU",
+      "sector": "Technology",
+      "industry": "Software - Application",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "Intuit Inc.",
+      "shares_outstanding": 276550000
+    },
+    {
+      "ticker": "ISRG",
+      "sector": "Healthcare",
+      "industry": "Medical Instruments & Supplies",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "Intuitive Surgical, Inc.",
+      "shares_outstanding": 355169692
+    },
+    {
+      "ticker": "IVZ",
+      "sector": "Financial Services",
+      "industry": "Asset Management",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Invesco Ltd.",
+      "shares_outstanding": 444313529
+    },
+    {
+      "ticker": "INVH",
+      "sector": "Real Estate",
+      "industry": "REIT - Residential",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Invitation Homes Inc.",
+      "shares_outstanding": 599446021
+    },
+    {
+      "ticker": "IQV",
+      "sector": "Healthcare",
+      "industry": "Diagnostics & Research",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "IQVIA Holdings Inc.",
+      "shares_outstanding": 167866339
+    },
+    {
+      "ticker": "IRM",
+      "sector": "Real Estate",
+      "industry": "REIT - Specialty",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Iron Mountain Incorporated",
+      "shares_outstanding": 297478817
+    },
+    {
+      "ticker": "JBHT",
+      "sector": "Industrials",
+      "industry": "Integrated Freight & Logistics",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "J.B. Hunt Transport Services, Inc.",
+      "shares_outstanding": 94604083
+    },
+    {
+      "ticker": "JKHY",
+      "sector": "Technology",
+      "industry": "Information Technology Services",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "Jack Henry & Associates, Inc.",
+      "shares_outstanding": 72167368
+    },
+    {
+      "ticker": "JNJ",
+      "sector": "Healthcare",
+      "industry": "Drug Manufacturers - General",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Johnson & Johnson",
+      "shares_outstanding": 2408613219
+    },
+    {
+      "ticker": "JCI",
+      "sector": "Industrials",
+      "industry": "Building Products & Equipment",
+      "exchange": "NYQ",
+      "country": "Ireland",
+      "longName": "Johnson Controls International plc",
+      "shares_outstanding": 612066206
+    },
+    {
+      "ticker": "JPM",
+      "sector": "Financial Services",
+      "industry": "Banks - Diversified",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "JPMorgan Chase & Co.",
+      "shares_outstanding": 2682219629
+    },
+    {
+      "ticker": "KVUE",
+      "sector": "Consumer Defensive",
+      "industry": "Household & Personal Products",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Kenvue Inc.",
+      "shares_outstanding": 1919916307
+    },
+    {
+      "ticker": "KDP",
+      "sector": "Consumer Defensive",
+      "industry": "Beverages - Non-Alcoholic",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "Keurig Dr Pepper Inc.",
+      "shares_outstanding": 1358666059
+    },
+    {
+      "ticker": "KEY",
+      "sector": "Financial Services",
+      "industry": "Banks - Regional",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "KeyCorp",
+      "shares_outstanding": 1072693693
+    },
+    {
+      "ticker": "KEYS",
+      "sector": "Technology",
+      "industry": "Scientific & Technical Instruments",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Keysight Technologies, Inc.",
+      "shares_outstanding": 171502495
+    },
+    {
+      "ticker": "KMB",
+      "sector": "Consumer Defensive",
+      "industry": "Household & Personal Products",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "Kimberly-Clark Corporation",
+      "shares_outstanding": 331925766
+    },
+    {
+      "ticker": "KIM",
+      "sector": "Real Estate",
+      "industry": "REIT - Retail",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Kimco Realty Corporation",
+      "shares_outstanding": 674403212
+    },
+    {
+      "ticker": "KMI",
+      "sector": "Energy",
+      "industry": "Oil & Gas Midstream",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Kinder Morgan, Inc.",
+      "shares_outstanding": 2224818888
+    },
+    {
+      "ticker": "KKR",
+      "sector": "Financial Services",
+      "industry": "Asset Management",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "KKR & Co. Inc.",
+      "shares_outstanding": 891550894
+    },
+    {
+      "ticker": "KLAC",
+      "sector": "Technology",
+      "industry": "Semiconductor Equipment & Materials",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "KLA Corporation",
+      "shares_outstanding": 131076611
+    },
+    {
+      "ticker": "KHC",
+      "sector": "Consumer Defensive",
+      "industry": "Packaged Foods",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "The Kraft Heinz Company",
+      "shares_outstanding": 1183744751
+    },
+    {
+      "ticker": "KR",
+      "sector": "Consumer Defensive",
+      "industry": "Grocery Stores",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "The Kroger Co.",
+      "shares_outstanding": 612575611
+    },
+    {
+      "ticker": "LHX",
+      "sector": "Industrials",
+      "industry": "Aerospace & Defense",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "L3Harris Technologies, Inc.",
+      "shares_outstanding": 186785895
+    },
+    {
+      "ticker": "LH",
+      "sector": "Healthcare",
+      "industry": "Diagnostics & Research",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Labcorp Holdings Inc.",
+      "shares_outstanding": 82400000
+    },
+    {
+      "ticker": "LRCX",
+      "sector": "Technology",
+      "industry": "Semiconductor Equipment & Materials",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "Lam Research Corporation",
+      "shares_outstanding": 1248771000
+    },
+    {
+      "ticker": "LW",
+      "sector": "Consumer Defensive",
+      "industry": "Packaged Foods",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Lamb Weston Holdings, Inc.",
+      "shares_outstanding": 138072803
+    },
+    {
+      "ticker": "LVS",
+      "sector": "Consumer Cyclical",
+      "industry": "Resorts & Casinos",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Las Vegas Sands Corp.",
+      "shares_outstanding": 663618211
+    },
+    {
+      "ticker": "LDOS",
+      "sector": "Technology",
+      "industry": "Information Technology Services",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Leidos Holdings, Inc.",
+      "shares_outstanding": 125928552
+    },
+    {
+      "ticker": "LEN",
+      "sector": "Consumer Cyclical",
+      "industry": "Residential Construction",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Lennar Corporation",
+      "shares_outstanding": 215244398
+    },
+    {
+      "ticker": "LLY",
+      "sector": "Healthcare",
+      "industry": "Drug Manufacturers - General",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Eli Lilly and Company",
+      "shares_outstanding": 893357420
+    },
+    {
+      "ticker": "LIN",
+      "sector": "Basic Materials",
+      "industry": "Specialty Chemicals",
+      "exchange": "NMS",
+      "country": "United Kingdom",
+      "longName": "Linde plc",
+      "shares_outstanding": 463394156
+    },
+    {
+      "ticker": "LYV",
+      "sector": "Communication Services",
+      "industry": "Entertainment",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Live Nation Entertainment, Inc.",
+      "shares_outstanding": 234801922
+    },
+    {
+      "ticker": "LKQ",
+      "sector": "Consumer Cyclical",
+      "industry": "Auto Parts",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "LKQ Corporation",
+      "shares_outstanding": 255209121
+    },
+    {
+      "ticker": "LMT",
+      "sector": "Industrials",
+      "industry": "Aerospace & Defense",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Lockheed Martin Corporation",
+      "shares_outstanding": 230462118
+    },
+    {
+      "ticker": "L",
+      "sector": "Financial Services",
+      "industry": "Insurance - Property & Casualty",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Loews Corporation",
+      "shares_outstanding": 205767698
+    },
+    {
+      "ticker": "LOW",
+      "sector": "Consumer Cyclical",
+      "industry": "Home Improvement Retail",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Lowe's Companies, Inc.",
+      "shares_outstanding": 560063429
+    },
+    {
+      "ticker": "LULU",
+      "sector": "Consumer Cyclical",
+      "industry": "Apparel Retail",
+      "exchange": "NMS",
+      "country": "Canada",
+      "longName": "lululemon athletica inc.",
+      "shares_outstanding": 110482671
+    },
+    {
+      "ticker": "LYB",
+      "sector": "Basic Materials",
+      "industry": "Specialty Chemicals",
+      "exchange": "NYQ",
+      "country": "United Kingdom",
+      "longName": "LyondellBasell Industries N.V.",
+      "shares_outstanding": 322169978
+    },
+    {
+      "ticker": "MTB",
+      "sector": "Financial Services",
+      "industry": "Banks - Regional",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "M&T Bank Corporation",
+      "shares_outstanding": 148504608
+    },
+    {
+      "ticker": "MPC",
+      "sector": "Energy",
+      "industry": "Oil & Gas Refining & Marketing",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Marathon Petroleum Corporation",
+      "shares_outstanding": 294496878
+    },
+    {
+      "ticker": "MKTX",
+      "sector": "Financial Services",
+      "industry": "Capital Markets",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "MarketAxess Holdings Inc.",
+      "shares_outstanding": 35548265
+    },
+    {
+      "ticker": "MAR",
+      "sector": "Consumer Cyclical",
+      "industry": "Lodging",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "Marriott International, Inc.",
+      "shares_outstanding": 264931993
+    },
+    {
+      "ticker": "MLM",
+      "sector": "Basic Materials",
+      "industry": "Building Materials",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Martin Marietta Materials, Inc.",
+      "shares_outstanding": 60312046
+    },
+    {
+      "ticker": "MAS",
+      "sector": "Industrials",
+      "industry": "Building Products & Equipment",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Masco Corporation",
+      "shares_outstanding": 203607085
+    },
+    {
+      "ticker": "MA",
+      "sector": "Financial Services",
+      "industry": "Credit Services",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Mastercard Incorporated",
+      "shares_outstanding": 885216386
+    },
+    {
+      "ticker": "MTCH",
+      "sector": "Communication Services",
+      "industry": "Internet Content & Information",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "Match Group, Inc.",
+      "shares_outstanding": 232644477
+    },
+    {
+      "ticker": "MKC",
+      "sector": "Consumer Defensive",
+      "industry": "Packaged Foods",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "McCormick & Company, Incorporated",
+      "shares_outstanding": 253986983
+    },
+    {
+      "ticker": "MCD",
+      "sector": "Consumer Cyclical",
+      "industry": "Restaurants",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "McDonald's Corporation",
+      "shares_outstanding": 710827631
+    },
+    {
+      "ticker": "MCK",
+      "sector": "Healthcare",
+      "industry": "Medical Distribution",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "McKesson Corporation",
+      "shares_outstanding": 122487456
+    },
+    {
+      "ticker": "MDT",
+      "sector": "Healthcare",
+      "industry": "Medical Devices",
+      "exchange": "NYQ",
+      "country": "Ireland",
+      "longName": "Medtronic plc",
+      "shares_outstanding": 1283884964
+    },
+    {
+      "ticker": "MRK",
+      "sector": "Healthcare",
+      "industry": "Drug Manufacturers - General",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Merck & Co., Inc.",
+      "shares_outstanding": 2469879206
+    },
+    {
+      "ticker": "META",
+      "sector": "Communication Services",
+      "industry": "Internet Content & Information",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "Meta Platforms, Inc.",
+      "shares_outstanding": 2187177748
+    },
+    {
+      "ticker": "MET",
+      "sector": "Financial Services",
+      "industry": "Insurance - Life",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "MetLife, Inc.",
+      "shares_outstanding": 652053867
+    },
+    {
+      "ticker": "MTD",
+      "sector": "Healthcare",
+      "industry": "Diagnostics & Research",
+      "exchange": "NYQ",
+      "country": "Switzerland",
+      "longName": "Mettler-Toledo International Inc.",
+      "shares_outstanding": 20248505
+    },
+    {
+      "ticker": "MGM",
+      "sector": "Consumer Cyclical",
+      "industry": "Resorts & Casinos",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "MGM Resorts International",
+      "shares_outstanding": 255828519
+    },
+    {
+      "ticker": "MCHP",
+      "sector": "Technology",
+      "industry": "Semiconductors",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "Microchip Technology Incorporated",
+      "shares_outstanding": 541135458
+    },
+    {
+      "ticker": "MU",
+      "sector": "Technology",
+      "industry": "Semiconductors",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "Micron Technology, Inc.",
+      "shares_outstanding": 1127734051
+    },
+    {
+      "ticker": "MSFT",
+      "sector": "Technology",
+      "industry": "Software - Infrastructure",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "Microsoft Corporation",
+      "shares_outstanding": 7425629076
+    },
+    {
+      "ticker": "MAA",
+      "sector": "Real Estate",
+      "industry": "REIT - Residential",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Mid-America Apartment Communities, Inc.",
+      "shares_outstanding": 116347636
+    },
+    {
+      "ticker": "MRNA",
+      "sector": "Healthcare",
+      "industry": "Biotechnology",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "Moderna, Inc.",
+      "shares_outstanding": 396586862
+    },
+    {
+      "ticker": "MHK",
+      "sector": "Consumer Cyclical",
+      "industry": "Furnishings, Fixtures & Appliances",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Mohawk Industries, Inc.",
+      "shares_outstanding": 61197654
+    },
+    {
+      "ticker": "MOH",
+      "sector": "Healthcare",
+      "industry": "Healthcare Plans",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Molina Healthcare, Inc.",
+      "shares_outstanding": 52091073
+    },
+    {
+      "ticker": "TAP",
+      "sector": "Consumer Defensive",
+      "industry": "Beverages - Brewers",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Molson Coors Beverage Company",
+      "shares_outstanding": 175639344
+    },
+    {
+      "ticker": "MDLZ",
+      "sector": "Consumer Defensive",
+      "industry": "Confectioners",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "Mondelez International, Inc.",
+      "shares_outstanding": 1283456590
+    },
+    {
+      "ticker": "MPWR",
+      "sector": "Technology",
+      "industry": "Semiconductors",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "Monolithic Power Systems, Inc.",
+      "shares_outstanding": 49118000
+    },
+    {
+      "ticker": "MNST",
+      "sector": "Consumer Defensive",
+      "industry": "Beverages - Non-Alcoholic",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "Monster Beverage Corporation",
+      "shares_outstanding": 977906022
+    },
+    {
+      "ticker": "MCO",
+      "sector": "Financial Services",
+      "industry": "Financial Data & Stock Exchanges",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Moody's Corporation",
+      "shares_outstanding": 178003875
+    },
+    {
+      "ticker": "MS",
+      "sector": "Financial Services",
+      "industry": "Capital Markets",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Morgan Stanley",
+      "shares_outstanding": 1581386814
+    },
+    {
+      "ticker": "MSI",
+      "sector": "Technology",
+      "industry": "Communication Equipment",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Motorola Solutions, Inc.",
+      "shares_outstanding": 166203611
+    },
+    {
+      "ticker": "MSCI",
+      "sector": "Financial Services",
+      "industry": "Financial Data & Stock Exchanges",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "MSCI Inc.",
+      "shares_outstanding": 73120206
+    },
+    {
+      "ticker": "NDAQ",
+      "sector": "Financial Services",
+      "industry": "Financial Data & Stock Exchanges",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "Nasdaq, Inc.",
+      "shares_outstanding": 568443856
+    },
+    {
+      "ticker": "NTAP",
+      "sector": "Technology",
+      "industry": "Software - Infrastructure",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "NetApp, Inc.",
+      "shares_outstanding": 197330400
+    },
+    {
+      "ticker": "NFLX",
+      "sector": "Communication Services",
+      "industry": "Entertainment",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "Netflix, Inc.",
+      "shares_outstanding": 4237323340
+    },
+    {
+      "ticker": "NWL",
+      "sector": "Consumer Defensive",
+      "industry": "Household & Personal Products",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "Newell Brands Inc.",
+      "shares_outstanding": 424927772
+    },
+    {
+      "ticker": "NEM",
+      "sector": "Basic Materials",
+      "industry": "Gold",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Newmont Corporation",
+      "shares_outstanding": 1079933130
+    },
+    {
+      "ticker": "NWSA",
+      "sector": "Communication Services",
+      "industry": "Entertainment",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "News Corporation",
+      "shares_outstanding": 366253192
+    },
+    {
+      "ticker": "NWS",
+      "sector": "Communication Services",
+      "industry": "Entertainment",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "News Corporation",
+      "shares_outstanding": 183192823
+    },
+    {
+      "ticker": "NEE",
+      "sector": "Utilities",
+      "industry": "Utilities - Regulated Electric",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "NextEra Energy, Inc.",
+      "shares_outstanding": 2085302855
+    },
+    {
+      "ticker": "NKE",
+      "sector": "Consumer Cyclical",
+      "industry": "Footwear & Accessories",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "NIKE, Inc.",
+      "shares_outstanding": 1199499281
+    },
+    {
+      "ticker": "NI",
+      "sector": "Utilities",
+      "industry": "Utilities - Regulated Gas",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "NiSource Inc.",
+      "shares_outstanding": 478533171
+    },
+    {
+      "ticker": "NDSN",
+      "sector": "Industrials",
+      "industry": "Specialty Industrial Machinery",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "Nordson Corporation",
+      "shares_outstanding": 55783598
+    },
+    {
+      "ticker": "NSC",
+      "sector": "Industrials",
+      "industry": "Railroads",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Norfolk Southern Corporation",
+      "shares_outstanding": 224504829
+    },
+    {
+      "ticker": "NTRS",
+      "sector": "Financial Services",
+      "industry": "Asset Management",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "Northern Trust Corporation",
+      "shares_outstanding": 185320921
+    },
+    {
+      "ticker": "NOC",
+      "sector": "Industrials",
+      "industry": "Aerospace & Defense",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Northrop Grumman Corporation",
+      "shares_outstanding": 142033159
+    },
+    {
+      "ticker": "NCLH",
+      "sector": "Consumer Cyclical",
+      "industry": "Travel Services",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Norwegian Cruise Line Holdings Ltd.",
+      "shares_outstanding": 455545641
+    },
+    {
+      "ticker": "NRG",
+      "sector": "Utilities",
+      "industry": "Utilities - Independent Power Producers",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "NRG Energy, Inc.",
+      "shares_outstanding": 212376200
+    },
+    {
+      "ticker": "NUE",
+      "sector": "Basic Materials",
+      "industry": "Steel",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Nucor Corporation",
+      "shares_outstanding": 227735644
+    },
+    {
+      "ticker": "NVDA",
+      "sector": "Technology",
+      "industry": "Semiconductors",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "NVIDIA Corporation",
+      "shares_outstanding": 24300000000
+    },
+    {
+      "ticker": "NVR",
+      "sector": "Consumer Cyclical",
+      "industry": "Residential Construction",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "NVR, Inc.",
+      "shares_outstanding": 2778119
+    },
+    {
+      "ticker": "NXPI",
+      "sector": "Technology",
+      "industry": "Semiconductors",
+      "exchange": "NMS",
+      "country": "Netherlands",
+      "longName": "NXP Semiconductors N.V.",
+      "shares_outstanding": 252692845
+    },
+    {
+      "ticker": "ORLY",
+      "sector": "Consumer Cyclical",
+      "industry": "Auto Parts",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "O'Reilly Automotive, Inc.",
+      "shares_outstanding": 836699472
+    },
+    {
+      "ticker": "OXY",
+      "sector": "Energy",
+      "industry": "Oil & Gas E&P",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Occidental Petroleum Corporation",
+      "shares_outstanding": 991695181
+    },
+    {
+      "ticker": "ODFL",
+      "sector": "Industrials",
+      "industry": "Trucking",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "Old Dominion Freight Line, Inc.",
+      "shares_outstanding": 208425619
+    },
+    {
+      "ticker": "OMC",
+      "sector": "Communication Services",
+      "industry": "Advertising Agencies",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Omnicom Group Inc.",
+      "shares_outstanding": 284988976
+    },
+    {
+      "ticker": "ON",
+      "sector": "Technology",
+      "industry": "Semiconductors",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "ON Semiconductor Corporation",
+      "shares_outstanding": 393327318
+    },
+    {
+      "ticker": "OKE",
+      "sector": "Energy",
+      "industry": "Oil & Gas Midstream",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "ONEOK, Inc.",
+      "shares_outstanding": 630030624
+    },
+    {
+      "ticker": "ORCL",
+      "sector": "Technology",
+      "industry": "Software - Infrastructure",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Oracle Corporation",
+      "shares_outstanding": 2876046000
+    },
+    {
+      "ticker": "OTIS",
+      "sector": "Industrials",
+      "industry": "Specialty Industrial Machinery",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Otis Worldwide Corporation",
+      "shares_outstanding": 388720773
+    },
+    {
+      "ticker": "PCAR",
+      "sector": "Industrials",
+      "industry": "Farm & Heavy Construction Machinery",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "PACCAR Inc",
+      "shares_outstanding": 525894443
+    },
+    {
+      "ticker": "PKG",
+      "sector": "Consumer Cyclical",
+      "industry": "Packaging & Containers",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Packaging Corporation of America",
+      "shares_outstanding": 89027954
+    },
+    {
+      "ticker": "PANW",
+      "sector": "Technology",
+      "industry": "Software - Infrastructure",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "Palo Alto Networks, Inc.",
+      "shares_outstanding": 811000000
+    },
+    {
+      "ticker": "PH",
+      "sector": "Industrials",
+      "industry": "Specialty Industrial Machinery",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Parker-Hannifin Corporation",
+      "shares_outstanding": 126216529
+    },
+    {
+      "ticker": "PAYX",
+      "sector": "Technology",
+      "industry": "Software - Application",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "Paychex, Inc.",
+      "shares_outstanding": 358290881
+    },
+    {
+      "ticker": "PAYC",
+      "sector": "Technology",
+      "industry": "Software - Application",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Paycom Software, Inc.",
+      "shares_outstanding": 47666129
+    },
+    {
+      "ticker": "PYPL",
+      "sector": "Financial Services",
+      "industry": "Credit Services",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "PayPal Holdings, Inc.",
+      "shares_outstanding": 899673971
+    },
+    {
+      "ticker": "PNR",
+      "sector": "Industrials",
+      "industry": "Specialty Industrial Machinery",
+      "exchange": "NYQ",
+      "country": "United Kingdom",
+      "longName": "Pentair plc",
+      "shares_outstanding": 161602800
+    },
+    {
+      "ticker": "PEP",
+      "sector": "Consumer Defensive",
+      "industry": "Beverages - Non-Alcoholic",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "PepsiCo, Inc.",
+      "shares_outstanding": 1366940965
+    },
+    {
+      "ticker": "PFE",
+      "sector": "Healthcare",
+      "industry": "Drug Manufacturers - General",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Pfizer Inc.",
+      "shares_outstanding": 5688356129
+    },
+    {
+      "ticker": "PCG",
+      "sector": "Utilities",
+      "industry": "Utilities - Regulated Electric",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "PG&E Corporation",
+      "shares_outstanding": 2202220356
+    },
+    {
+      "ticker": "PM",
+      "sector": "Consumer Defensive",
+      "industry": "Tobacco",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Philip Morris International Inc.",
+      "shares_outstanding": 1558530268
+    },
+    {
+      "ticker": "PSX",
+      "sector": "Energy",
+      "industry": "Oil & Gas Refining & Marketing",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Phillips 66",
+      "shares_outstanding": 400982591
+    },
+    {
+      "ticker": "PNW",
+      "sector": "Utilities",
+      "industry": "Utilities - Regulated Electric",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Pinnacle West Capital Corporation",
+      "shares_outstanding": 121025652
+    },
+    {
+      "ticker": "PNC",
+      "sector": "Financial Services",
+      "industry": "Banks - Regional",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "The PNC Financial Services Group, Inc.",
+      "shares_outstanding": 403370923
+    },
+    {
+      "ticker": "POOL",
+      "sector": "Industrials",
+      "industry": "Industrial Distribution",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "Pool Corporation",
+      "shares_outstanding": 36700584
+    },
+    {
+      "ticker": "PPG",
+      "sector": "Basic Materials",
+      "industry": "Specialty Chemicals",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "PPG Industries, Inc.",
+      "shares_outstanding": 223798650
+    },
+    {
+      "ticker": "PPL",
+      "sector": "Utilities",
+      "industry": "Utilities - Regulated Electric",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "PPL Corporation",
+      "shares_outstanding": 752165097
+    },
+    {
+      "ticker": "PFG",
+      "sector": "Financial Services",
+      "industry": "Asset Management",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "Principal Financial Group, Inc.",
+      "shares_outstanding": 216449333
+    },
+    {
+      "ticker": "PG",
+      "sector": "Consumer Defensive",
+      "industry": "Household & Personal Products",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "The Procter & Gamble Company",
+      "shares_outstanding": 2336733549
+    },
+    {
+      "ticker": "PGR",
+      "sector": "Financial Services",
+      "industry": "Insurance - Property & Casualty",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "The Progressive Corporation",
+      "shares_outstanding": 584962821
+    },
+    {
+      "ticker": "PLD",
+      "sector": "Real Estate",
+      "industry": "REIT - Industrial",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Prologis, Inc.",
+      "shares_outstanding": 932230676
+    },
+    {
+      "ticker": "PRU",
+      "sector": "Financial Services",
+      "industry": "Insurance - Life",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Prudential Financial, Inc.",
+      "shares_outstanding": 347818703
+    },
+    {
+      "ticker": "PEG",
+      "sector": "Utilities",
+      "industry": "Utilities - Regulated Electric",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Public Service Enterprise Group Incorporated",
+      "shares_outstanding": 498739910
+    },
+    {
+      "ticker": "PTC",
+      "sector": "Technology",
+      "industry": "Software - Application",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "PTC Inc.",
+      "shares_outstanding": 118996116
+    },
+    {
+      "ticker": "PSA",
+      "sector": "Real Estate",
+      "industry": "REIT - Industrial",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Public Storage",
+      "shares_outstanding": 175542279
+    },
+    {
+      "ticker": "PHM",
+      "sector": "Consumer Cyclical",
+      "industry": "Residential Construction",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "PulteGroup, Inc.",
+      "shares_outstanding": 191589250
+    },
+    {
+      "ticker": "QRVO",
+      "sector": "Technology",
+      "industry": "Semiconductors",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "Qorvo, Inc.",
+      "shares_outstanding": 92705679
+    },
+    {
+      "ticker": "QCOM",
+      "sector": "Technology",
+      "industry": "Semiconductors",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "QUALCOMM Incorporated",
+      "shares_outstanding": 1067000000
+    },
+    {
+      "ticker": "PWR",
+      "sector": "Industrials",
+      "industry": "Engineering & Construction",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Quanta Services, Inc.",
+      "shares_outstanding": 149619428
+    },
+    {
+      "ticker": "DGX",
+      "sector": "Healthcare",
+      "industry": "Diagnostics & Research",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Quest Diagnostics Incorporated",
+      "shares_outstanding": 110684580
+    },
+    {
+      "ticker": "RL",
+      "sector": "Consumer Cyclical",
+      "industry": "Apparel Manufacturing",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Ralph Lauren Corporation",
+      "shares_outstanding": 38655137
+    },
+    {
+      "ticker": "RJF",
+      "sector": "Financial Services",
+      "industry": "Asset Management",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Raymond James Financial, Inc.",
+      "shares_outstanding": 197091037
+    },
+    {
+      "ticker": "RTX",
+      "sector": "Industrials",
+      "industry": "Aerospace & Defense",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "RTX Corporation",
+      "shares_outstanding": 1345974220
+    },
+    {
+      "ticker": "O",
+      "sector": "Real Estate",
+      "industry": "REIT - Retail",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Realty Income Corporation",
+      "shares_outstanding": 932450634
+    },
+    {
+      "ticker": "REG",
+      "sector": "Real Estate",
+      "industry": "REIT - Retail",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "Regency Centers Corporation",
+      "shares_outstanding": 183083369
+    },
+    {
+      "ticker": "REGN",
+      "sector": "Healthcare",
+      "industry": "Biotechnology",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "Regeneron Pharmaceuticals, Inc.",
+      "shares_outstanding": 103902660
+    },
+    {
+      "ticker": "RF",
+      "sector": "Financial Services",
+      "industry": "Banks - Regional",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Regions Financial Corporation",
+      "shares_outstanding": 854316271
+    },
+    {
+      "ticker": "RSG",
+      "sector": "Industrials",
+      "industry": "Waste Management",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Republic Services, Inc.",
+      "shares_outstanding": 308956192
+    },
+    {
+      "ticker": "RMD",
+      "sector": "Healthcare",
+      "industry": "Medical Instruments & Supplies",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "ResMed Inc.",
+      "shares_outstanding": 145678401
+    },
+    {
+      "ticker": "RHI",
+      "sector": "Industrials",
+      "industry": "Staffing & Employment Services",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Robert Half Inc.",
+      "shares_outstanding": 101161069
+    },
+    {
+      "ticker": "ROK",
+      "sector": "Industrials",
+      "industry": "Specialty Industrial Machinery",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Rockwell Automation, Inc.",
+      "shares_outstanding": 112357908
+    },
+    {
+      "ticker": "ROL",
+      "sector": "Consumer Cyclical",
+      "industry": "Personal Services",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Rollins, Inc.",
+      "shares_outstanding": 481988844
+    },
+    {
+      "ticker": "ROP",
+      "sector": "Technology",
+      "industry": "Software - Application",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "Roper Technologies, Inc.",
+      "shares_outstanding": 102372821
+    },
+    {
+      "ticker": "ROST",
+      "sector": "Consumer Cyclical",
+      "industry": "Apparel Retail",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "Ross Stores, Inc.",
+      "shares_outstanding": 322356795
+    },
+    {
+      "ticker": "RCL",
+      "sector": "Consumer Cyclical",
+      "industry": "Travel Services",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Royal Caribbean Cruises Ltd.",
+      "shares_outstanding": 270528303
+    },
+    {
+      "ticker": "SPGI",
+      "sector": "Financial Services",
+      "industry": "Financial Data & Stock Exchanges",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "S&P Global Inc.",
+      "shares_outstanding": 295979612
+    },
+    {
+      "ticker": "CRM",
+      "sector": "Technology",
+      "industry": "Software - Application",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Salesforce, Inc.",
+      "shares_outstanding": 923000000
+    },
+    {
+      "ticker": "SBAC",
+      "sector": "Real Estate",
+      "industry": "REIT - Specialty",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "SBA Communications Corporation",
+      "shares_outstanding": 106062407
+    },
+    {
+      "ticker": "SLB",
+      "sector": "Energy",
+      "industry": "Oil & Gas Equipment & Services",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "SLB N.V.",
+      "shares_outstanding": 1501133298
+    },
+    {
+      "ticker": "STX",
+      "sector": "Technology",
+      "industry": "Computer Hardware",
+      "exchange": "NMS",
+      "country": "Singapore",
+      "longName": "Seagate Technology Holdings plc",
+      "shares_outstanding": 224025376
+    },
+    {
+      "ticker": "SRE",
+      "sector": "Utilities",
+      "industry": "Utilities - Diversified",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Sempra",
+      "shares_outstanding": 653332556
+    },
+    {
+      "ticker": "NOW",
+      "sector": "Technology",
+      "industry": "Software - Application",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "ServiceNow, Inc.",
+      "shares_outstanding": 1046000000
+    },
+    {
+      "ticker": "SHW",
+      "sector": "Basic Materials",
+      "industry": "Specialty Chemicals",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "The Sherwin-Williams Company",
+      "shares_outstanding": 247362348
+    },
+    {
+      "ticker": "SPG",
+      "sector": "Real Estate",
+      "industry": "REIT - Retail",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Simon Property Group, Inc.",
+      "shares_outstanding": 324840186
+    },
+    {
+      "ticker": "SWKS",
+      "sector": "Technology",
+      "industry": "Semiconductors",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "Skyworks Solutions, Inc.",
+      "shares_outstanding": 150405963
+    },
+    {
+      "ticker": "SJM",
+      "sector": "Consumer Defensive",
+      "industry": "Packaged Foods",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "The J. M. Smucker Company",
+      "shares_outstanding": 106648319
+    },
+    {
+      "ticker": "SNA",
+      "sector": "Industrials",
+      "industry": "Tools & Accessories",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Snap-on Incorporated",
+      "shares_outstanding": 52057343
+    },
+    {
+      "ticker": "SEDG",
+      "sector": "Technology",
+      "industry": "Solar",
+      "exchange": "NMS",
+      "country": "Israel",
+      "longName": "SolarEdge Technologies, Inc.",
+      "shares_outstanding": 60366291
+    },
+    {
+      "ticker": "SO",
+      "sector": "Utilities",
+      "industry": "Utilities - Regulated Electric",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "The Southern Company",
+      "shares_outstanding": 1127304104
+    },
+    {
+      "ticker": "LUV",
+      "sector": "Industrials",
+      "industry": "Airlines",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Southwest Airlines Co.",
+      "shares_outstanding": 491075748
+    },
+    {
+      "ticker": "SWK",
+      "sector": "Industrials",
+      "industry": "Tools & Accessories",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Stanley Black & Decker, Inc.",
+      "shares_outstanding": 155286429
+    },
+    {
+      "ticker": "SBUX",
+      "sector": "Consumer Cyclical",
+      "industry": "Restaurants",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "Starbucks Corporation",
+      "shares_outstanding": 1139300000
+    },
+    {
+      "ticker": "STT",
+      "sector": "Financial Services",
+      "industry": "Asset Management",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "State Street Corporation",
+      "shares_outstanding": 277035190
+    },
+    {
+      "ticker": "STLD",
+      "sector": "Basic Materials",
+      "industry": "Steel",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "Steel Dynamics, Inc.",
+      "shares_outstanding": 144722225
+    },
+    {
+      "ticker": "STE",
+      "sector": "Healthcare",
+      "industry": "Medical Devices",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "STERIS plc",
+      "shares_outstanding": 98075025
+    },
+    {
+      "ticker": "SYK",
+      "sector": "Healthcare",
+      "industry": "Medical Devices",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Stryker Corporation",
+      "shares_outstanding": 382984253
+    },
+    {
+      "ticker": "SYF",
+      "sector": "Financial Services",
+      "industry": "Credit Services",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Synchrony Financial",
+      "shares_outstanding": 347596279
+    },
+    {
+      "ticker": "SNPS",
+      "sector": "Technology",
+      "industry": "Software - Infrastructure",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "Synopsys, Inc.",
+      "shares_outstanding": 191562027
+    },
+    {
+      "ticker": "SYY",
+      "sector": "Consumer Defensive",
+      "industry": "Food Distribution",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Sysco Corporation",
+      "shares_outstanding": 478178260
+    },
+    {
+      "ticker": "TMUS",
+      "sector": "Communication Services",
+      "industry": "Telecom Services",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "T-Mobile US, Inc.",
+      "shares_outstanding": 1101862739
+    },
+    {
+      "ticker": "TROW",
+      "sector": "Financial Services",
+      "industry": "Asset Management",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "T. Rowe Price Group, Inc.",
+      "shares_outstanding": 217605891
+    },
+    {
+      "ticker": "TTWO",
+      "sector": "Communication Services",
+      "industry": "Electronic Gaming & Multimedia",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "Take-Two Interactive Software, Inc.",
+      "shares_outstanding": 185175456
+    },
+    {
+      "ticker": "TPR",
+      "sector": "Consumer Cyclical",
+      "industry": "Luxury Goods",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Tapestry, Inc.",
+      "shares_outstanding": 202464223
+    },
+    {
+      "ticker": "TRGP",
+      "sector": "Energy",
+      "industry": "Oil & Gas Midstream",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Targa Resources Corp.",
+      "shares_outstanding": 214801969
+    },
+    {
+      "ticker": "TGT",
+      "sector": "Consumer Defensive",
+      "industry": "Discount Stores",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Target Corporation",
+      "shares_outstanding": 452855589
+    },
+    {
+      "ticker": "TEL",
+      "sector": "Technology",
+      "industry": "Electronic Components",
+      "exchange": "NYQ",
+      "country": "Ireland",
+      "longName": "TE Connectivity plc",
+      "shares_outstanding": 293434273
+    },
+    {
+      "ticker": "TDY",
+      "sector": "Technology",
+      "industry": "Scientific & Technical Instruments",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Teledyne Technologies Incorporated",
+      "shares_outstanding": 46317285
+    },
+    {
+      "ticker": "TFX",
+      "sector": "Healthcare",
+      "industry": "Medical Instruments & Supplies",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Teleflex Incorporated",
+      "shares_outstanding": 44200562
+    },
+    {
+      "ticker": "TER",
+      "sector": "Technology",
+      "industry": "Semiconductor Equipment & Materials",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "Teradyne, Inc.",
+      "shares_outstanding": 156559428
+    },
+    {
+      "ticker": "TSLA",
+      "sector": "Consumer Cyclical",
+      "industry": "Auto Manufacturers",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "Tesla, Inc.",
+      "shares_outstanding": 3752431984
+    },
+    {
+      "ticker": "TXN",
+      "sector": "Technology",
+      "industry": "Semiconductors",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "Texas Instruments Incorporated",
+      "shares_outstanding": 910463377
+    },
+    {
+      "ticker": "TXT",
+      "sector": "Industrials",
+      "industry": "Aerospace & Defense",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Textron Inc.",
+      "shares_outstanding": 174098891
+    },
+    {
+      "ticker": "TMO",
+      "sector": "Healthcare",
+      "industry": "Diagnostics & Research",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Thermo Fisher Scientific Inc.",
+      "shares_outstanding": 371621362
+    },
+    {
+      "ticker": "TJX",
+      "sector": "Consumer Cyclical",
+      "industry": "Apparel Retail",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "The TJX Companies, Inc.",
+      "shares_outstanding": 1106810654
+    },
+    {
+      "ticker": "TSCO",
+      "sector": "Consumer Cyclical",
+      "industry": "Specialty Retail",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "Tractor Supply Company",
+      "shares_outstanding": 526006314
+    },
+    {
+      "ticker": "TT",
+      "sector": "Industrials",
+      "industry": "Building Products & Equipment",
+      "exchange": "NYQ",
+      "country": "Ireland",
+      "longName": "Trane Technologies plc",
+      "shares_outstanding": 221331905
+    },
+    {
+      "ticker": "TDG",
+      "sector": "Industrials",
+      "industry": "Aerospace & Defense",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "TransDigm Group Incorporated",
+      "shares_outstanding": 56473563
+    },
+    {
+      "ticker": "TRV",
+      "sector": "Financial Services",
+      "industry": "Insurance - Property & Casualty",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "The Travelers Companies, Inc.",
+      "shares_outstanding": 212642789
+    },
+    {
+      "ticker": "TRMB",
+      "sector": "Technology",
+      "industry": "Scientific & Technical Instruments",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "Trimble Inc.",
+      "shares_outstanding": 232088731
+    },
+    {
+      "ticker": "TFC",
+      "sector": "Financial Services",
+      "industry": "Banks - Regional",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Truist Financial Corporation",
+      "shares_outstanding": 1241009752
+    },
+    {
+      "ticker": "TYL",
+      "sector": "Technology",
+      "industry": "Software - Application",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Tyler Technologies, Inc.",
+      "shares_outstanding": 42453700
+    },
+    {
+      "ticker": "TSN",
+      "sector": "Consumer Defensive",
+      "industry": "Farm Products",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Tyson Foods, Inc.",
+      "shares_outstanding": 282069961
+    },
+    {
+      "ticker": "USB",
+      "sector": "Financial Services",
+      "industry": "Banks - Regional",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "U.S. Bancorp",
+      "shares_outstanding": 1552252176
+    },
+    {
+      "ticker": "UDR",
+      "sector": "Real Estate",
+      "industry": "REIT - Residential",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "UDR, Inc.",
+      "shares_outstanding": 328571965
+    },
+    {
+      "ticker": "ULTA",
+      "sector": "Consumer Cyclical",
+      "industry": "Specialty Retail",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "Ulta Beauty, Inc.",
+      "shares_outstanding": 43736630
+    },
+    {
+      "ticker": "UAL",
+      "sector": "Industrials",
+      "industry": "Airlines",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "United Airlines Holdings, Inc.",
+      "shares_outstanding": 324649382
+    },
+    {
+      "ticker": "UPS",
+      "sector": "Industrials",
+      "industry": "Integrated Freight & Logistics",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "United Parcel Service, Inc.",
+      "shares_outstanding": 745633402
+    },
+    {
+      "ticker": "URI",
+      "sector": "Industrials",
+      "industry": "Rental & Leasing Services",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "United Rentals, Inc.",
+      "shares_outstanding": 62886315
+    },
+    {
+      "ticker": "UNH",
+      "sector": "Healthcare",
+      "industry": "Healthcare Plans",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "UnitedHealth Group Incorporated",
+      "shares_outstanding": 907675839
+    },
+    {
+      "ticker": "UHS",
+      "sector": "Healthcare",
+      "industry": "Medical Care Facilities",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Universal Health Services, Inc.",
+      "shares_outstanding": 53780983
+    },
+    {
+      "ticker": "UNP",
+      "sector": "Industrials",
+      "industry": "Railroads",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Union Pacific Corporation",
+      "shares_outstanding": 593678300
+    },
+    {
+      "ticker": "VLO",
+      "sector": "Energy",
+      "industry": "Oil & Gas Refining & Marketing",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Valero Energy Corporation",
+      "shares_outstanding": 298953671
+    },
+    {
+      "ticker": "VTR",
+      "sector": "Real Estate",
+      "industry": "REIT - Healthcare Facilities",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Ventas, Inc.",
+      "shares_outstanding": 475463173
+    },
+    {
+      "ticker": "VLTO",
+      "sector": "Industrials",
+      "industry": "Pollution & Treatment Controls",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Veralto Corporation",
+      "shares_outstanding": 245565117
+    },
+    {
+      "ticker": "VRSN",
+      "sector": "Technology",
+      "industry": "Software - Infrastructure",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "VeriSign, Inc.",
+      "shares_outstanding": 91700000
+    },
+    {
+      "ticker": "VRSK",
+      "sector": "Industrials",
+      "industry": "Consulting Services",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "Verisk Analytics, Inc.",
+      "shares_outstanding": 131000536
+    },
+    {
+      "ticker": "VZ",
+      "sector": "Communication Services",
+      "industry": "Telecom Services",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Verizon Communications Inc.",
+      "shares_outstanding": 4180000000
+    },
+    {
+      "ticker": "VRTX",
+      "sector": "Healthcare",
+      "industry": "Biotechnology",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "Vertex Pharmaceuticals Incorporated",
+      "shares_outstanding": 254359735
+    },
+    {
+      "ticker": "VFC",
+      "sector": "Consumer Cyclical",
+      "industry": "Apparel Manufacturing",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "V.F. Corporation",
+      "shares_outstanding": 391263343
+    },
+    {
+      "ticker": "VTRS",
+      "sector": "Healthcare",
+      "industry": "Drug Manufacturers - Specialty & Generic",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "Viatris Inc.",
+      "shares_outstanding": 1164420909
+    },
+    {
+      "ticker": "VICI",
+      "sector": "Real Estate",
+      "industry": "REIT - Diversified",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "VICI Properties Inc.",
+      "shares_outstanding": 1068988999
+    },
+    {
+      "ticker": "V",
+      "sector": "Financial Services",
+      "industry": "Credit Services",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Visa Inc.",
+      "shares_outstanding": 1681093942
+    },
+    {
+      "ticker": "VMC",
+      "sector": "Basic Materials",
+      "industry": "Building Materials",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Vulcan Materials Company",
+      "shares_outstanding": 130462251
+    },
+    {
+      "ticker": "WAB",
+      "sector": "Industrials",
+      "industry": "Railroads",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Westinghouse Air Brake Technologies Corporation",
+      "shares_outstanding": 170171898
+    },
+    {
+      "ticker": "WMT",
+      "sector": "Consumer Defensive",
+      "industry": "Discount Stores",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "Walmart Inc.",
+      "shares_outstanding": 7972402501
+    },
+    {
+      "ticker": "WBD",
+      "sector": "Communication Services",
+      "industry": "Entertainment",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "Warner Bros. Discovery, Inc.",
+      "shares_outstanding": 2506768389
+    },
+    {
+      "ticker": "WM",
+      "sector": "Industrials",
+      "industry": "Waste Management",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Waste Management, Inc.",
+      "shares_outstanding": 402913509
+    },
+    {
+      "ticker": "WAT",
+      "sector": "Healthcare",
+      "industry": "Diagnostics & Research",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Waters Corporation",
+      "shares_outstanding": 98165491
+    },
+    {
+      "ticker": "WEC",
+      "sector": "Utilities",
+      "industry": "Utilities - Regulated Electric",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "WEC Energy Group, Inc.",
+      "shares_outstanding": 325699608
+    },
+    {
+      "ticker": "WFC",
+      "sector": "Financial Services",
+      "industry": "Banks - Diversified",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Wells Fargo & Company",
+      "shares_outstanding": 3074954752
+    },
+    {
+      "ticker": "WELL",
+      "sector": "Real Estate",
+      "industry": "REIT - Healthcare Facilities",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Welltower Inc.",
+      "shares_outstanding": 697752530
+    },
+    {
+      "ticker": "WST",
+      "sector": "Healthcare",
+      "industry": "Medical Instruments & Supplies",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "West Pharmaceutical Services, Inc.",
+      "shares_outstanding": 72081610
+    },
+    {
+      "ticker": "DD",
+      "sector": "Basic Materials",
+      "industry": "Specialty Chemicals",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "DuPont de Nemours, Inc.",
+      "shares_outstanding": 408923857
+    },
+    {
+      "ticker": "WDC",
+      "sector": "Technology",
+      "industry": "Computer Hardware",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "Western Digital Corporation",
+      "shares_outstanding": 339037922
+    },
+    {
+      "ticker": "WY",
+      "sector": "Real Estate",
+      "industry": "REIT - Specialty",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Weyerhaeuser Company",
+      "shares_outstanding": 721042609
+    },
+    {
+      "ticker": "WMB",
+      "sector": "Energy",
+      "industry": "Oil & Gas Midstream",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "The Williams Companies, Inc.",
+      "shares_outstanding": 1222856952
+    },
+    {
+      "ticker": "WTW",
+      "sector": "Financial Services",
+      "industry": "Insurance Brokers",
+      "exchange": "NMS",
+      "country": "United Kingdom",
+      "longName": "Willis Towers Watson Public Limited Company",
+      "shares_outstanding": 94203101
+    },
+    {
+      "ticker": "GWW",
+      "sector": "Industrials",
+      "industry": "Industrial Distribution",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "W.W. Grainger, Inc.",
+      "shares_outstanding": 47329985
+    },
+    {
+      "ticker": "WYNN",
+      "sector": "Consumer Cyclical",
+      "industry": "Resorts & Casinos",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "Wynn Resorts, Limited",
+      "shares_outstanding": 104043396
+    },
+    {
+      "ticker": "XEL",
+      "sector": "Utilities",
+      "industry": "Utilities - Regulated Electric",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "Xcel Energy Inc.",
+      "shares_outstanding": 624162193
+    },
+    {
+      "ticker": "XYL",
+      "sector": "Industrials",
+      "industry": "Specialty Industrial Machinery",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Xylem Inc.",
+      "shares_outstanding": 240826446
+    },
+    {
+      "ticker": "YUM",
+      "sector": "Consumer Cyclical",
+      "industry": "Restaurants",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Yum! Brands, Inc.",
+      "shares_outstanding": 276173275
+    },
+    {
+      "ticker": "ZBRA",
+      "sector": "Technology",
+      "industry": "Communication Equipment",
+      "exchange": "NMS",
+      "country": "United States",
+      "longName": "Zebra Technologies Corporation",
+      "shares_outstanding": 48362608
+    },
+    {
+      "ticker": "ZBH",
+      "sector": "Healthcare",
+      "industry": "Medical Devices",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Zimmer Biomet Holdings, Inc.",
+      "shares_outstanding": 193569082
+    },
+    {
+      "ticker": "ZTS",
+      "sector": "Healthcare",
+      "industry": "Drug Manufacturers - Specialty & Generic",
+      "exchange": "NYQ",
+      "country": "United States",
+      "longName": "Zoetis Inc.",
+      "shares_outstanding": 420517197
+    }
+  ]
+}

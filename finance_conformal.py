@@ -7,34 +7,47 @@ FINANCE CONFORMAL PREDICTION  —  AdaptedCAFHT on S&P 500 data
 QUICK START
 -----------
 Step 1 — pull data (once):
-  python finance_data.py --pull --start 2024-04-01 --end 2024-06-01
+  python finance_data.py --pull --start 2024-02-01 --end 2024-03-28
 
 Step 2 — run experiment:
 
-  # Technology as test sector, no shift correction (default):
-  python finance_conformal.py --npz sp500_20241001_20241129.npz  --test_sector Technology
+  # Technology as test sector, no shift correction:
+  python finance_conformal.py --npz sp500_20240201_20240328.npz
 
-  # Technology as test sector, WITH shift correction:
-  python finance_conformal.py --npz sp500_20241001_20241129.npz  --test_sector Technology --with_shift
+  # Technology as test sector, WITH shift correction (primary result):
+  python finance_conformal.py --npz sp500_20240201_20240328.npz --with_shift
 
-  # Other sectors:
-  python finance_conformal.py --npz sp500_20231004_20240328.npz --test_sector Healthcare --with_shift
-  python finance_conformal.py --npz sp500_20231004_20240328.npz --test_sector Energy --with_shift
+  # Other sectors as test (with shift correction):
+  python finance_conformal.py --npz sp500_20240201_20240328.npz --test_sector Healthcare --with_shift
+  python finance_conformal.py --npz sp500_20240201_20240328.npz --test_sector Energy --with_shift
+
+  # Mixed test set — null/no-shift baseline (randomly drawn from all sectors):
+  python finance_conformal.py --npz sp500_20240201_20240328.npz --mixed
+  python finance_conformal.py --npz sp500_20240201_20240328.npz --mixed --with_shift
+
+  # Save outputs:
+  python finance_conformal.py --npz sp500_20240201_20240328.npz --save_plot results/v1_tech_noshift_20240201.png
 
 FULL OPTIONS
 ------------
-  --npz          Path to .npz data file (required)
-  --test_sector  Sector held out as test set (required)
-  --with_shift   Enable likelihood-ratio covariate-shift weighting.
-  --alpha        Miscoverage level. Default: 0.1  (targets 90% coverage)
-  --cal_frac     Fraction of non-test tickers used for calibration. Default: 0.5
-  --gamma_grid   Space-separated ACI step-size candidates.
-  --seed         Random seed. Default: 42
-  --save_plot    Path to save the output figure.
-  --save_json    Path to save results as JSON.
+  --npz              Path to .npz data file (required)
+  --test_sector      Sector held out as test set. Default: Technology
+                     Ignored when --mixed is set.
+  --with_shift       Enable likelihood-ratio covariate-shift weighting.
+                     Without this flag, calibration weights are uniform.
+  --mixed            Mixed-sector test set: randomly draw --mixed_test_frac of
+                     ALL tickers as test (no sector bias). Null/no-shift baseline
+                     that validates shift correction is harmless when shift is absent.
+  --mixed_test_frac  Fraction of tickers used as test in --mixed mode. Default: 0.15
+  --alpha            Miscoverage level. Default: 0.1  (targets 90% coverage)
+  --cal_frac         Fraction of non-test tickers used for calibration. Default: 0.5
+  --gamma_grid       Space-separated ACI step-size candidates.
+  --seed             Random seed. Default: 42
+  --save_plot        Path to save the output figure (PNG or PDF).
+  --save_json        Path to save results as JSON.
 
-FEATURIZER
-----------
+FEATURIZER  (used only with --with_shift)
+-----------------------------------------
   Y features — computed over the most recent Y_WINDOW=30 steps of Y
   (or fewer if t < Y_WINDOW):
     Y_mean, Y_std, Y_ar1
@@ -51,59 +64,90 @@ import json
 import types
 from pathlib import Path
 import numpy as np
+import matplotlib
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from finance_data import load_stored
 from algorithm import AdaptedCAFHT
 
+# ── Shared plot style ────────────────────────────────────────────────────────
+_C_COV    = "#2166ac"   # coverage line  (blue)
+_C_TARGET = "#d6604d"   # target line    (red-orange)
+_C_WIDTH  = "#4dac26"   # width line     (green)
+_C_GAMMA  = "#7b2d8b"   # gamma line     (purple)
+
+def _style_ax(ax):
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+
 GAMMA_GRID    = [0.001, 0.005, 0.01, 0.05]
 Y_WINDOW      = 30
+X_WINDOW      = 5    # rolling window for X features (0 = full prefix mean)
 AR1_MIN_STEPS = 5
 
 
 # =============================================================================
-# Featurizer: rolling window Y summaries + full-prefix X means
+# Featurizer factory: rolling window Y summaries + rolling/full-prefix X means
 # =============================================================================
-def _featurize_YX_summaries(self, Y_prefixes, X_prefixes=None):
+def _make_featurizer(x_window=X_WINDOW):
     """
-    Y_prefixes: (n, t+1, 1)
-    X_prefixes: (n, t+1, n_cov)  optional
+    Returns a bound-method-compatible featurizer.
 
-    Y features (3) over last Y_WINDOW steps:
-      Y_mean, Y_std, Y_ar1
+    x_window : int
+        Number of most-recent time steps used to compute X feature means.
+        0 (or negative) → use the full prefix mean (original behaviour).
+        Default: X_WINDOW (5 days).
 
-    X features (n_cov) over full prefix:
-      mean of each covariate
-
-    No normalisation applied.
+    To revert to full-prefix means, pass x_window=0 (or --x_window 0 on the CLI).
     """
-    Y = Y_prefixes[..., 0]      # (n, t+1)
-    n, T = Y.shape
+    def _featurize_YX_summaries(self, Y_prefixes, X_prefixes=None):
+        """
+        Y_prefixes: (n, t+1, 1)
+        X_prefixes: (n, t+1, n_cov)  optional
 
-    # Rolling window for Y features
-    w   = min(Y_WINDOW, T)
-    Y_w = Y[:, -w:]             # (n, w)
+        Y features (3) over last Y_WINDOW steps:
+          Y_mean, Y_std, Y_ar1
 
-    y_mean = Y_w.mean(axis=1)
-    y_std  = Y_w.std(axis=1) + 1e-8
+        X features (n_cov):
+          mean of each covariate over the most recent x_window steps
+          (or full prefix when x_window <= 0)
+        """
+        Y = Y_prefixes[..., 0]      # (n, t+1)
+        n, T = Y.shape
 
-    if w >= AR1_MIN_STEPS:
-        x_ar = Y_w[:, :-1]
-        y_ar = Y_w[:, 1:]
-        x_c  = x_ar - x_ar.mean(axis=1, keepdims=True)
-        y_c  = y_ar - y_ar.mean(axis=1, keepdims=True)
-        num  = (x_c * y_c).sum(axis=1)
-        den  = (x_c ** 2).sum(axis=1) + 1e-8
-        y_ar1 = np.clip(num / den, -5.0, 5.0)
-    else:
-        y_ar1 = np.zeros(n)
+        # ── Y rolling-window features ─────────────────────────────────────────
+        w   = min(Y_WINDOW, T)
+        Y_w = Y[:, -w:]             # (n, w)
 
-    y_feats = np.column_stack([y_mean, y_std, y_ar1])  # (n, 3)
+        y_mean = Y_w.mean(axis=1)
+        y_std  = Y_w.std(axis=1) + 1e-8
 
-    if X_prefixes is not None and X_prefixes.shape[-1] > 0:
-        x_means = X_prefixes.mean(axis=1)              # (n, n_cov)
-        return np.concatenate([y_feats, x_means], axis=1)
+        if w >= AR1_MIN_STEPS:
+            x_ar = Y_w[:, :-1]
+            y_ar = Y_w[:, 1:]
+            x_c  = x_ar - x_ar.mean(axis=1, keepdims=True)
+            y_c  = y_ar - y_ar.mean(axis=1, keepdims=True)
+            num  = (x_c * y_c).sum(axis=1)
+            den  = (x_c ** 2).sum(axis=1) + 1e-8
+            y_ar1 = np.clip(num / den, -5.0, 5.0)
+        else:
+            y_ar1 = np.zeros(n)
 
-    return y_feats
+        y_feats = np.column_stack([y_mean, y_std, y_ar1])  # (n, 3)
+
+        if X_prefixes is not None and X_prefixes.shape[-1] > 0:
+            # ── X rolling-window features ─────────────────────────────────────
+            if x_window > 0:
+                w_x = min(x_window, T)
+                X_w = X_prefixes[:, -w_x:, :]   # (n, w_x, n_cov)
+            else:
+                X_w = X_prefixes                 # full prefix
+            x_means = X_w.mean(axis=1)           # (n, n_cov)
+            return np.concatenate([y_feats, x_means], axis=1)
+
+        return y_feats
+
+    return _featurize_YX_summaries
 
 
 # =============================================================================
@@ -271,7 +315,13 @@ def _select_gamma(Y_train, X_train, cov_names, base_alpha, t_max, gamma_grid, se
 # Main experiment
 # =============================================================================
 def run_finance_experiment(result, test_sector, cal_frac=0.5, alpha=0.1, seed=42,
-                           gamma_grid=None, with_shift=False):
+                           gamma_grid=None, with_shift=False, mixed=False,
+                           mixed_test_frac=0.15, x_window=X_WINDOW):
+    """
+    mixed=True  : ignore test_sector; randomly draw mixed_test_frac of all tickers
+                  as test (no sector bias → null/no-shift baseline).
+    mixed=False : hold out test_sector as test (sector covariate shift experiment).
+    """
     if gamma_grid is None:
         gamma_grid = GAMMA_GRID
 
@@ -288,19 +338,29 @@ def run_finance_experiment(result, test_sector, cal_frac=0.5, alpha=0.1, seed=42
     feat_names = ["Y_mean(w30)", "Y_std(w30)", "Y_ar1(w30)"] + \
                  [f"X_mean_{c}" for c in cov_names]
 
-    test_mask = np.array([m["sector"].lower() == test_sector.lower() for m in meta])
-    n_test    = int(test_mask.sum())
-    n_other   = int((~test_mask).sum())
+    rng = np.random.default_rng(seed)
 
-    if n_test == 0:
-        available = sorted({m["sector"] for m in meta})
-        raise ValueError(
-            f"No tickers found for sector '{test_sector}'.\nAvailable: {available}"
-        )
+    if mixed:
+        # ── Mixed mode: random test split, no sector filtering ────────────────
+        n_test  = max(10, int(n_series * mixed_test_frac))
+        all_idx = rng.permutation(n_series)
+        test_mask           = np.zeros(n_series, dtype=bool)
+        test_mask[all_idx[:n_test]] = True
+        display_sector = "Mixed (all sectors)"
+    else:
+        test_mask = np.array([m["sector"].lower() == test_sector.lower() for m in meta])
+        n_test    = int(test_mask.sum())
+        display_sector = test_sector
+        if n_test == 0:
+            available = sorted({m["sector"] for m in meta})
+            raise ValueError(
+                f"No tickers found for sector '{test_sector}'.\nAvailable: {available}"
+            )
+
+    n_other = int((~test_mask).sum())
     if n_other == 0:
-        raise ValueError("All tickers belong to the test sector.")
+        raise ValueError("All tickers belong to the test set.")
 
-    rng       = np.random.default_rng(seed)
     other_idx = rng.permutation(np.where(~test_mask)[0])
     n_cal     = int(n_other * cal_frac)
     n_train   = n_other - n_cal
@@ -320,9 +380,9 @@ def run_finance_experiment(result, test_sector, cal_frac=0.5, alpha=0.1, seed=42
     print(f"  Finance Conformal Experiment  (AdaptedCAFHT)")
     print(f"{'='*62}")
     print(f"  Total tickers   : {n_series}")
-    print(f"  Test sector     : {test_sector}  ({n_test} tickers)")
-    print(f"  Train           : {n_train} non-{test_sector} tickers")
-    print(f"  Cal             : {n_cal} non-{test_sector} tickers")
+    print(f"  Test set        : {display_sector}  ({n_test} tickers)")
+    print(f"  Train           : {n_train} tickers")
+    print(f"  Cal             : {n_cal} tickers")
     print(f"  Time steps      : {L}  [{dates[0]} -> {dates[-1]}]")
     print(f"  Covariates      : {cov_names}")
     print(f"  Alpha           : {alpha}  (target = {1-alpha:.0%})")
@@ -339,7 +399,7 @@ def run_finance_experiment(result, test_sector, cal_frac=0.5, alpha=0.1, seed=42
 
     if with_shift:
         predictor._featurize_prefixes = types.MethodType(
-            _featurize_YX_summaries, predictor
+            _make_featurizer(x_window=x_window), predictor
         )
 
     alpha_t   = np.full(n_test, alpha, dtype=float)
@@ -352,6 +412,10 @@ def run_finance_experiment(result, test_sector, cal_frac=0.5, alpha=0.1, seed=42
     first_true  = []
     first_lower = []
     first_upper = []
+    # ── shift-correction diagnostics (only populated when with_shift=True) ────
+    clf_prob1_mean_by_time = []   # mean P(test class) on cal set per step
+    clf_prob1_std_by_time  = []   # std  P(test class) on cal set per step
+    weight_ess_frac_by_time = []  # effective sample size / n_cal per step
 
     for t in range(T):
 
@@ -397,10 +461,11 @@ def run_finance_experiment(result, test_sector, cal_frac=0.5, alpha=0.1, seed=42
             half1 = np.arange(0, mid)
             half2 = np.arange(mid, n_test)
 
-            alpha_used = alpha_t.copy()
-            alpha_next = alpha_t.copy()
-            covered_t  = []
-            width_t    = []
+            alpha_used  = alpha_t.copy()
+            alpha_next  = alpha_t.copy()
+            covered_t   = []
+            width_t     = []
+            _prob1_acc  = []   # collect prob1 arrays across both halves for diagnostics
 
             for pred_idx, ctx_idx in [(half1, half2), (half2, half1)]:
 
@@ -425,6 +490,10 @@ def run_finance_experiment(result, test_sector, cal_frac=0.5, alpha=0.1, seed=42
                     testX=predictor._test_feat_t,
                     evalX=cal_feat,
                 )
+
+                # ── collect classifier prob1 for this half ────────────────────
+                if predictor._last_cal_prob1 is not None:
+                    _prob1_acc.append(predictor._last_cal_prob1.copy())
 
                 if pred_idx is half1 and (t == 1 or t % 10 == 0 or t == T - 1):
                     _print_feature_diagnostic(predictor, cal_feat, t, feat_names)
@@ -465,6 +534,19 @@ def run_finance_experiment(result, test_sector, cal_frac=0.5, alpha=0.1, seed=42
 
             alpha_t = np.clip(alpha_next, 1e-6, 1.0 - 1e-6)
 
+            # ── summarise classifier diagnostics for this step ────────────────
+            if _prob1_acc:
+                p1_all = np.concatenate(_prob1_acc)
+                w_norm = per_series_w / (per_series_w.sum() + 1e-30)
+                ess    = float(1.0 / ((w_norm ** 2).sum() + 1e-30)) / n_cal
+                clf_prob1_mean_by_time.append(float(p1_all.mean()))
+                clf_prob1_std_by_time.append(float(p1_all.std()))
+                weight_ess_frac_by_time.append(float(ess))
+            else:
+                clf_prob1_mean_by_time.append(float("nan"))
+                clf_prob1_std_by_time.append(float("nan"))
+                weight_ess_frac_by_time.append(float("nan"))
+
         else:
             alpha_used = alpha_t.copy()
             alpha_next = alpha_t.copy()
@@ -491,6 +573,11 @@ def run_finance_experiment(result, test_sector, cal_frac=0.5, alpha=0.1, seed=42
 
             alpha_t = np.clip(alpha_next, 1e-6, 1.0 - 1e-6)
 
+            # no shift — no classifier diagnostics
+            clf_prob1_mean_by_time.append(float("nan"))
+            clf_prob1_std_by_time.append(float("nan"))
+            weight_ess_frac_by_time.append(float("nan"))
+
         coverage_by_time.append(float(np.mean(covered_t)))
         width_by_time.append(float(np.mean(width_t)))
         all_covered.extend(covered_t)
@@ -507,20 +594,24 @@ def run_finance_experiment(result, test_sector, cal_frac=0.5, alpha=0.1, seed=42
     print(f"  Final gamma_opt  : {gamma_opt}")
 
     return {
-        "coverage_by_time":  coverage_by_time,
-        "width_by_time":     width_by_time,
-        "overall_coverage":  overall_coverage,
-        "target_coverage":   target,
-        "dates":             [str(dates[t+1]) for t in range(T)],
-        "gamma_opt_history": gamma_opt_history,
-        "first_test_ticker": test_tickers[0],
+        "coverage_by_time":       coverage_by_time,
+        "width_by_time":          width_by_time,
+        "overall_coverage":       overall_coverage,
+        "target_coverage":        target,
+        "dates":                  [str(dates[t+1]) for t in range(T)],
+        "gamma_opt_history":      gamma_opt_history,
+        "first_test_ticker":      test_tickers[0],
         "first_test_series": {
             "true":  first_true,
             "lower": first_lower,
             "upper": first_upper,
         },
+        # shift-correction diagnostics (NaN entries when with_shift=False or t==0)
+        "clf_prob1_mean_by_time":  clf_prob1_mean_by_time,
+        "clf_prob1_std_by_time":   clf_prob1_std_by_time,
+        "weight_ess_frac_by_time": weight_ess_frac_by_time,
         "config": {
-            "test_sector": test_sector,
+            "test_sector": display_sector,
             "n_train":     int(n_train),
             "n_cal":       int(n_cal),
             "n_test":      int(n_test),
@@ -529,7 +620,9 @@ def run_finance_experiment(result, test_sector, cal_frac=0.5, alpha=0.1, seed=42
             "gamma_grid":  [float(g) for g in gamma_grid],
             "seed":        seed,
             "with_shift":  with_shift,
+            "mixed":       mixed,
             "Y_window":    Y_WINDOW,
+            "x_window":    x_window,
             "cov_names":   cov_names,
             "feat_names":  feat_names,
         },
@@ -537,7 +630,27 @@ def run_finance_experiment(result, test_sector, cal_frac=0.5, alpha=0.1, seed=42
 
 
 # =============================================================================
-# Plotting
+# Plotting helpers
+# =============================================================================
+def _set_date_ticks(axes_flat, dates, x):
+    tick_every = max(1, len(dates) // 10)
+    tick_pos   = x[::tick_every]
+    tick_lbl   = [dates[i] for i in tick_pos]
+    for ax in axes_flat:
+        ax.set_xticks(tick_pos)
+        ax.set_xticklabels(tick_lbl, rotation=45, ha="right", fontsize=8)
+        ax.set_xlabel("Date", fontsize=10)
+
+
+def _save_fig(fig, save_path):
+    out = Path(save_path)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(out, dpi=200, bbox_inches="tight")
+    print(f"  [Plot] Saved to {out}")
+
+
+# =============================================================================
+# Single-run plot
 # =============================================================================
 def plot_results(results, save_path=None):
     dates   = results["dates"]
@@ -549,72 +662,214 @@ def plot_results(results, save_path=None):
     ticker  = results["first_test_ticker"]
     gammas  = results["gamma_opt_history"]
 
-    x = np.arange(len(dates))
-    fig, axes = plt.subplots(2, 2, figsize=(16, 10))
+    x          = np.arange(len(dates))
+    shift_tag  = "with shift correction" if cfg["with_shift"] else "no shift correction"
+    mixed_tag  = "  |  mixed test set" if cfg.get("mixed") else ""
+    fig, axes  = plt.subplots(2, 2, figsize=(14, 9))
     fig.suptitle(
-        f"Finance Conformal Prediction (AdaptedCAFHT)  |  "
-        f"Test sector: {cfg['test_sector']}  |  "
+        f"AdaptedCAFHT  |  Test: {cfg['test_sector']}  |  {shift_tag}{mixed_tag}\n"
         f"alpha={cfg['alpha']}  |  "
         f"train/cal/test = {cfg['n_train']}/{cfg['n_cal']}/{cfg['n_test']} tickers",
-        fontsize=12, fontweight='bold'
+        fontsize=11, fontweight="bold",
     )
 
-    axes[0, 0].plot(x, cov_t, 'b-', linewidth=1.5, label='Empirical coverage')
-    axes[0, 0].axhline(target, color='red', linestyle='--', linewidth=2,
-                       label=f'Target ({target:.0%})')
-    axes[0, 0].set_ylim(0.5, 1.05)
-    axes[0, 0].set_ylabel('Coverage rate')
-    axes[0, 0].set_title(f'Coverage over Time  ({cfg["test_sector"]} sector)')
-    axes[0, 0].legend()
-    axes[0, 0].grid(True, alpha=0.3)
-    axes[0, 0].text(
-        0.02, 0.05,
-        f"Overall: {results['overall_coverage']:.3f}  "
-        f"(error {results['overall_coverage'] - target:+.3f})",
-        transform=axes[0, 0].transAxes, fontsize=10,
-        bbox=dict(facecolor='white', alpha=0.7)
-    )
+    # ── Coverage over time ────────────────────────────────────────────────────
+    ax = axes[0, 0]
+    ax.plot(x, cov_t, color=_C_COV, linewidth=1.8, label="Empirical coverage")
+    ax.axhline(target, color=_C_TARGET, linestyle="--", linewidth=1.8,
+               label=f"Target ({target:.0%})")
+    ax.set_ylim(0.5, 1.05)
+    ax.set_ylabel("Coverage rate", fontsize=10)
+    ax.set_title(f"Coverage over Time  ({cfg['test_sector']})", fontsize=10)
+    ax.legend(fontsize=9)
+    ax.grid(True, alpha=0.25)
+    ax.text(0.02, 0.05,
+            f"Overall: {results['overall_coverage']:.3f}  "
+            f"(error {results['overall_coverage'] - target:+.3f})",
+            transform=ax.transAxes, fontsize=9,
+            bbox=dict(facecolor="white", alpha=0.7, edgecolor="none"))
+    _style_ax(ax)
 
-    axes[0, 1].plot(x, width_t, 'g-', linewidth=1.5)
-    axes[0, 1].set_ylabel('Mean interval width')
-    axes[0, 1].set_title('Prediction Interval Width over Time')
-    axes[0, 1].grid(True, alpha=0.3)
+    # ── Width over time ───────────────────────────────────────────────────────
+    ax = axes[0, 1]
+    ax.plot(x, width_t, color=_C_WIDTH, linewidth=1.8)
+    ax.set_ylabel("Mean interval width", fontsize=10)
+    ax.set_title("Prediction Interval Width over Time", fontsize=10)
+    ax.grid(True, alpha=0.25)
+    _style_ax(ax)
 
+    # ── First ticker prediction interval ─────────────────────────────────────
+    ax        = axes[1, 0]
     true_arr  = np.array(first["true"])
     lower_arr = np.array(first["lower"])
     upper_arr = np.array(first["upper"])
     y_min     = float(np.percentile(true_arr, 1))
     y_max     = float(np.percentile(true_arr, 99))
     margin    = (y_max - y_min) * 0.3
-    axes[1, 0].fill_between(x, lower_arr, upper_arr, alpha=0.25, color='steelblue',
-                             label='Prediction interval')
-    axes[1, 0].plot(x, true_arr, 'k-', linewidth=1.5, label='Actual close')
-    axes[1, 0].set_ylim(y_min - margin, y_max + margin)
-    axes[1, 0].set_ylabel('Price ($)')
-    axes[1, 0].set_title(f'{ticker} - Actual Close vs. Prediction Interval')
-    axes[1, 0].legend()
-    axes[1, 0].grid(True, alpha=0.3)
+    ax.fill_between(x, lower_arr, upper_arr, alpha=0.25, color=_C_COV,
+                    label="Prediction interval")
+    ax.plot(x, true_arr, color="black", linewidth=1.5, label="Actual return")
+    ax.set_ylim(y_min - margin, y_max + margin)
+    ax.set_ylabel("Intraday return", fontsize=10)
+    ax.set_title(f"{ticker}  —  Return vs. Prediction Interval", fontsize=10)
+    ax.legend(fontsize=9)
+    ax.grid(True, alpha=0.25)
+    _style_ax(ax)
 
-    axes[1, 1].plot(x, gammas, drawstyle='steps-post', color='purple', linewidth=1.5)
-    axes[1, 1].set_ylabel('Selected gamma (log scale)')
-    axes[1, 1].set_title('ACI Gamma Selected over Time')
-    axes[1, 1].set_yscale('log')
-    axes[1, 1].grid(True, alpha=0.3)
+    # ── ACI gamma over time ───────────────────────────────────────────────────
+    ax = axes[1, 1]
+    ax.plot(x, gammas, drawstyle="steps-post", color=_C_GAMMA, linewidth=1.8)
+    ax.set_ylabel("Selected gamma", fontsize=10)
+    ax.set_title("ACI Gamma Selected over Time", fontsize=10)
+    ax.set_yscale("log")
+    ax.grid(True, alpha=0.25)
+    _style_ax(ax)
 
-    tick_every = max(1, len(dates) // 10)
-    tick_pos   = x[::tick_every]
-    tick_lbl   = [dates[i] for i in tick_pos]
-    for row in axes:
-        for ax in row:
-            ax.set_xticks(tick_pos)
-            ax.set_xticklabels(tick_lbl, rotation=45, ha='right', fontsize=8)
-            ax.set_xlabel('Date')
-
-    plt.tight_layout()
+    _set_date_ticks([ax for row in axes for ax in row], dates, x)
+    fig.tight_layout()
     if save_path:
-        plt.savefig(save_path, dpi=150, bbox_inches='tight')
-        print(f"  [Plot] Saved to {save_path}")
-    plt.show()
+        _save_fig(fig, save_path)
+
+
+# =============================================================================
+# Comparison plot  (with_shift vs no_shift overlaid)
+# =============================================================================
+def plot_comparison(r_shift, r_noshift, save_path=None):
+    """
+    Overlay with-shift and no-shift results for direct comparison.
+
+    Layout (3 × 2):
+      [0,0] Coverage over time            [0,1] Interval width over time
+      [1,0] Pointwise coverage difference [1,1] Cumulative mean coverage
+      [2,0] Classifier mean P(test)       [2,1] Weight ESS fraction
+    """
+    dates  = r_shift["dates"]
+    T      = min(len(dates), len(r_noshift["dates"]))
+    dates  = dates[:T]
+    x      = np.arange(T)
+
+    cov_s  = np.array(r_shift["coverage_by_time"][:T])
+    cov_n  = np.array(r_noshift["coverage_by_time"][:T])
+    wid_s  = np.array(r_shift["width_by_time"][:T])
+    wid_n  = np.array(r_noshift["width_by_time"][:T])
+    target = r_shift["target_coverage"]
+    cfg    = r_shift["config"]
+
+    # classifier diagnostics — present only in shift results
+    p1_mean = np.array(r_shift.get("clf_prob1_mean_by_time", [float("nan")] * T)[:T],
+                       dtype=float)
+    p1_std  = np.array(r_shift.get("clf_prob1_std_by_time",  [float("nan")] * T)[:T],
+                       dtype=float)
+    ess     = np.array(r_shift.get("weight_ess_frac_by_time", [float("nan")] * T)[:T],
+                       dtype=float)
+
+    C_SHIFT   = "#2166ac"   # blue        — with shift
+    C_NOSHIFT = "#d6604d"   # red-orange  — no shift
+    C_TARGET  = "#888888"   # grey        — target
+
+    fig, axes = plt.subplots(3, 2, figsize=(14, 13))
+    x_window_str = (f"{cfg.get('x_window', X_WINDOW)}-day"
+                    if cfg.get('x_window', X_WINDOW) > 0 else "full-prefix")
+    fig.suptitle(
+        f"AdaptedCAFHT  |  Test: {cfg['test_sector']}  |  Shift correction comparison\n"
+        f"alpha={cfg['alpha']}  |  "
+        f"train/cal/test = {cfg['n_train']}/{cfg['n_cal']}/{cfg['n_test']} tickers  |  "
+        f"X window: {x_window_str}",
+        fontsize=11, fontweight="bold",
+    )
+
+    # ── [0,0] Coverage over time ──────────────────────────────────────────────
+    ax = axes[0, 0]
+    ax.plot(x, cov_s, color=C_SHIFT,   linewidth=1.8,
+            label=f"With shift  (overall={r_shift['overall_coverage']:.3f})")
+    ax.plot(x, cov_n, color=C_NOSHIFT, linewidth=1.8, linestyle="--",
+            label=f"No shift    (overall={r_noshift['overall_coverage']:.3f})")
+    ax.axhline(target, color=C_TARGET, linestyle=":", linewidth=1.5,
+               label=f"Target ({target:.0%})")
+    ax.set_ylim(max(0.4, min(cov_s.min(), cov_n.min()) - 0.05), 1.05)
+    ax.set_ylabel("Coverage rate", fontsize=10)
+    ax.set_title("Coverage over Time", fontsize=10)
+    ax.legend(fontsize=9)
+    ax.grid(True, alpha=0.25)
+    _style_ax(ax)
+
+    # ── [0,1] Interval width over time ───────────────────────────────────────
+    ax = axes[0, 1]
+    ax.plot(x, wid_s, color=C_SHIFT,   linewidth=1.8, label="With shift")
+    ax.plot(x, wid_n, color=C_NOSHIFT, linewidth=1.8, linestyle="--", label="No shift")
+    ax.set_ylabel("Mean interval width", fontsize=10)
+    ax.set_title("Prediction Interval Width over Time", fontsize=10)
+    ax.legend(fontsize=9)
+    ax.grid(True, alpha=0.25)
+    _style_ax(ax)
+
+    # ── [1,0] Pointwise coverage difference ──────────────────────────────────
+    ax   = axes[1, 0]
+    diff = cov_s - cov_n
+    pos  = np.where(diff >= 0, diff, 0.0)
+    neg  = np.where(diff <  0, diff, 0.0)
+    ax.bar(x, pos, color=C_SHIFT,   alpha=0.75, label="Shift better")
+    ax.bar(x, neg, color=C_NOSHIFT, alpha=0.75, label="No-shift better")
+    ax.axhline(0, color="black", linewidth=0.8)
+    ax.set_ylabel("Coverage diff  (shift − no_shift)", fontsize=10)
+    ax.set_title("Pointwise Coverage Difference", fontsize=10)
+    ax.legend(fontsize=9)
+    ax.grid(True, alpha=0.25, axis="y")
+    _style_ax(ax)
+
+    # ── [1,1] Cumulative mean coverage ───────────────────────────────────────
+    ax    = axes[1, 1]
+    cum_s = np.cumsum(cov_s) / (x + 1)
+    cum_n = np.cumsum(cov_n) / (x + 1)
+    ax.plot(x, cum_s, color=C_SHIFT,   linewidth=1.8, label="With shift")
+    ax.plot(x, cum_n, color=C_NOSHIFT, linewidth=1.8, linestyle="--", label="No shift")
+    ax.axhline(target, color=C_TARGET, linestyle=":", linewidth=1.5,
+               label=f"Target ({target:.0%})")
+    ax.set_ylabel("Cumulative mean coverage", fontsize=10)
+    ax.set_title("Cumulative Coverage (Running Average)", fontsize=10)
+    ax.legend(fontsize=9)
+    ax.grid(True, alpha=0.25)
+    _style_ax(ax)
+
+    # ── [2,0] Classifier mean P(test class) on calibration set ───────────────
+    ax = axes[2, 0]
+    valid = np.isfinite(p1_mean)
+    if valid.any():
+        ax.plot(x[valid], p1_mean[valid], color=C_SHIFT, linewidth=1.8,
+                label="Mean P(test class)")
+        ax.fill_between(x[valid],
+                        (p1_mean - p1_std)[valid],
+                        (p1_mean + p1_std)[valid],
+                        alpha=0.2, color=C_SHIFT, label="±1 std")
+        ax.axhline(0.5, color=C_TARGET, linestyle=":", linewidth=1.5,
+                   label="0.5  (uniform — no shift detected)")
+    ax.set_ylim(0.0, 1.0)
+    ax.set_ylabel("P(test class)", fontsize=10)
+    ax.set_title("Classifier: P(test class) on Calibration Set\n"
+                 "→ near 0.5 = uniform weights (no shift detected)", fontsize=10)
+    ax.legend(fontsize=9)
+    ax.grid(True, alpha=0.25)
+    _style_ax(ax)
+
+    # ── [2,1] Weight effective sample size (ESS fraction) ────────────────────
+    ax = axes[2, 1]
+    valid = np.isfinite(ess)
+    if valid.any():
+        ax.plot(x[valid], ess[valid], color=C_SHIFT, linewidth=1.8)
+        ax.axhline(1.0, color=C_TARGET, linestyle=":", linewidth=1.5,
+                   label="1.0  (uniform weights)")
+    ax.set_ylim(0.0, 1.05)
+    ax.set_ylabel("ESS / n_cal", fontsize=10)
+    ax.set_title("Weight Effective Sample Size Fraction\n"
+                 "→ near 1.0 = weights collapsed to uniform", fontsize=10)
+    ax.legend(fontsize=9)
+    ax.grid(True, alpha=0.25)
+    _style_ax(ax)
+
+    _set_date_ticks([ax for row in axes for ax in row], dates, x)
+    fig.tight_layout()
+    if save_path:
+        _save_fig(fig, save_path)
 
 
 # =============================================================================
@@ -624,16 +879,37 @@ def main():
     parser = argparse.ArgumentParser(
         description="Run AdaptedCAFHT conformal prediction on S&P 500 finance data."
     )
-    parser.add_argument("--npz",         required=True)
-    parser.add_argument("--json",        default=None)
-    parser.add_argument("--test_sector", required=True)
-    parser.add_argument("--cal_frac",    type=float, default=0.5)
-    parser.add_argument("--alpha",       type=float, default=0.1)
-    parser.add_argument("--seed",        type=int,   default=42)
-    parser.add_argument("--gamma_grid",  type=float, nargs='+', default=GAMMA_GRID)
-    parser.add_argument("--with_shift",  action="store_true", default=False)
-    parser.add_argument("--save_plot",   default=None)
-    parser.add_argument("--save_json",   default=None)
+    parser.add_argument("--npz",             required=True)
+    parser.add_argument("--json",            default=None)
+    parser.add_argument("--test_sector",     default="Technology",
+                        help="Sector held out as test set (ignored when --mixed is set). "
+                             "Default: Technology")
+    parser.add_argument("--cal_frac",        type=float, default=0.5)
+    parser.add_argument("--alpha",           type=float, default=0.1)
+    parser.add_argument("--seed",            type=int,   default=42)
+    parser.add_argument("--gamma_grid",      type=float, nargs="+", default=GAMMA_GRID)
+    parser.add_argument("--with_shift",      action="store_true", default=False)
+    parser.add_argument("--mixed",           action="store_true", default=False,
+                        help="Mixed-sector test set: randomly draw tickers from ALL "
+                             "sectors as test (null/no-shift baseline). "
+                             "Overrides --test_sector.")
+    parser.add_argument("--mixed_test_frac", type=float, default=0.15,
+                        help="Fraction of all tickers used as test in --mixed mode. "
+                             "Default: 0.15  (~15%% of tickers)")
+    parser.add_argument("--x_window",       type=int,   default=X_WINDOW,
+                        help=f"Rolling window (days) for X covariate features used in "
+                             f"the shift classifier. Default: {X_WINDOW}. "
+                             f"Set 0 to revert to full-prefix mean (original behaviour).")
+    parser.add_argument("--save_plot",       default=None)
+    parser.add_argument("--save_json",       default=None)
+    # ── Comparison mode: overlay a second (no-shift) JSON result ─────────────
+    parser.add_argument("--compare_json",    default=None,
+                        help="Path to a second results JSON to overlay in a comparison "
+                             "plot. The current run is treated as 'with shift'; the "
+                             "loaded JSON as 'no shift'. Requires --save_compare.")
+    parser.add_argument("--save_compare",    default=None,
+                        help="Output path for the comparison figure (PNG or PDF). "
+                             "Used together with --compare_json.")
     args = parser.parse_args()
 
     npz_path  = Path(args.npz)
@@ -650,6 +926,9 @@ def main():
         seed=args.seed,
         gamma_grid=args.gamma_grid,
         with_shift=args.with_shift,
+        mixed=args.mixed,
+        mixed_test_frac=args.mixed_test_frac,
+        x_window=args.x_window,
     )
 
     if args.save_json:
@@ -660,6 +939,25 @@ def main():
         print(f"  [Results] Saved to {out}")
 
     plot_results(results, save_path=args.save_plot)
+
+    # ── Optional comparison plot ──────────────────────────────────────────────
+    if args.compare_json:
+        cmp_path = Path(args.compare_json)
+        if not cmp_path.exists():
+            raise FileNotFoundError(
+                f"--compare_json: file not found: {cmp_path}\n"
+                f"  Run the no-shift experiment first and save with --save_json, e.g.:\n"
+                f"    python finance_conformal.py --npz {args.npz} "
+                f"--save_json results/noshift.json"
+            )
+        with open(cmp_path) as f:
+            r_other = json.load(f)
+        # Determine which is shift / no_shift by the config flag
+        if results["config"]["with_shift"]:
+            r_shift, r_noshift = results, r_other
+        else:
+            r_shift, r_noshift = r_other, results
+        plot_comparison(r_shift, r_noshift, save_path=args.save_compare)
 
 
 if __name__ == "__main__":

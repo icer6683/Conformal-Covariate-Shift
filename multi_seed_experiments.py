@@ -15,8 +15,20 @@ USAGE:
 """
 
 import numpy as np
+import matplotlib
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import argparse
+
+# ── Shared plot style ────────────────────────────────────────────────────────
+_C_COV    = "#2166ac"   # coverage / primary  (blue)
+_C_TARGET = "#d6604d"   # target line         (red-orange)
+_C_WIDTH  = "#4dac26"   # width line          (green)
+_C_VAR    = "#7b2d8b"   # variability         (purple)
+
+def _style_ax(ax):
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
 from typing import Dict, List, Tuple
 import json
 from pathlib import Path
@@ -222,137 +234,145 @@ class MultiSeedExperiment:
     def plot_aggregated_results(self, aggregated: Dict, save_path: str = None):
         """
         Create comprehensive plots of aggregated results.
-        
+
         Args:
             aggregated: Dictionary from aggregate_results()
             save_path: Optional path to save the figure
         """
-        fig, axes = plt.subplots(2, 3, figsize=(18, 10))
-        
-        time_steps = aggregated['time_steps']
+        time_steps      = aggregated['time_steps']
         target_coverage = 1 - aggregated['config']['alpha']
-        predictor_type = aggregated['config']['predictor']
-        covariate_mode = aggregated['config']['covariate_mode']
-        with_shift = aggregated['config']['with_shift']
-        
-        # Build title
-        predictor_str = predictor_type.capitalize()
-        if predictor_type == "algorithm":
-            predictor_str = "Algorithm (AdaptedCAFHT)"
-        mode_str = "Dynamic $X_t$" if covariate_mode == "dynamic" else "Static X"
+        predictor_type  = aggregated['config']['predictor']
+        covariate_mode  = aggregated['config']['covariate_mode']
+        with_shift      = aggregated['config']['with_shift']
+
+        predictor_str = "Algorithm (AdaptedCAFHT)" if predictor_type == "algorithm" \
+                        else predictor_type.capitalize()
+        mode_str  = "Dynamic $X_t$" if covariate_mode == "dynamic" else "Static X"
         shift_str = "with Shift" if with_shift else "no Shift"
-        main_title = f"Multi-Seed Aggregated Results (n={aggregated['n_seeds']}) — {predictor_str}, {mode_str}, {shift_str}"
-        fig.suptitle(main_title, fontsize=14, fontweight='bold')
-        
-        # Plot 1: Coverage rate over time with confidence bands
+
+        fig, axes = plt.subplots(2, 3, figsize=(16, 9))
+        fig.suptitle(
+            f"Multi-Seed Results (n={aggregated['n_seeds']})  —  "
+            f"{predictor_str},  {mode_str},  {shift_str}",
+            fontsize=12, fontweight="bold",
+        )
+
         coverage_means = [aggregated['by_time'][t]['coverage_mean'] for t in time_steps]
-        coverage_stds = [aggregated['by_time'][t]['coverage_std'] for t in time_steps]
-        coverage_q25 = [aggregated['by_time'][t]['coverage_q25'] for t in time_steps]
-        coverage_q75 = [aggregated['by_time'][t]['coverage_q75'] for t in time_steps]
-        
-        axes[0, 0].plot(time_steps, coverage_means, 'b-', linewidth=2, label='Mean Coverage')
-        axes[0, 0].fill_between(time_steps, coverage_q25, coverage_q75, 
-                                alpha=0.3, color='blue', label='IQR (25%-75%)')
-        axes[0, 0].axhline(y=target_coverage, color='red', linestyle='--', 
-                          linewidth=2, label=f'Target ({target_coverage:.1%})')
-        axes[0, 0].set_ylim(0.8, 1.0)
-        axes[0, 0].set_xlabel('Time Step t')
-        axes[0, 0].set_ylabel('Coverage Rate')
-        axes[0, 0].set_title(f'Coverage Rate vs. Time (Aggregated over {self.n_seeds} seeds)')
-        axes[0, 0].legend()
-        axes[0, 0].grid(True, alpha=0.3)
-        
-        # Plot 2: Interval width over time
-        width_means = [aggregated['by_time'][t]['width_mean'] for t in time_steps]
-        width_stds = [aggregated['by_time'][t]['width_std'] for t in time_steps]
-        
-        axes[0, 1].plot(time_steps, width_means, 'g-', linewidth=2)
-        axes[0, 1].fill_between(time_steps, 
-                                np.array(width_means) - np.array(width_stds),
-                                np.array(width_means) + np.array(width_stds),
-                                alpha=0.3, color='green')
-        axes[0, 1].set_xlabel('Time Step t')
-        axes[0, 1].set_ylabel('Average Interval Width')
-        axes[0, 1].set_title('Prediction Interval Width vs. Time')
-        axes[0, 1].grid(True, alpha=0.3)
-        
-        # Plot 3: Distribution of coverage rates across seeds at selected time points
-        sample_times = [time_steps[0], time_steps[len(time_steps)//2], time_steps[-1]]
-        sample_labels = ['Early', 'Middle', 'Late']
-        
-        coverage_distributions = []
+        coverage_stds  = [aggregated['by_time'][t]['coverage_std']  for t in time_steps]
+        coverage_q25   = [aggregated['by_time'][t]['coverage_q25']  for t in time_steps]
+        coverage_q75   = [aggregated['by_time'][t]['coverage_q75']  for t in time_steps]
+        width_means    = [aggregated['by_time'][t]['width_mean']     for t in time_steps]
+        width_stds     = [aggregated['by_time'][t]['width_std']      for t in time_steps]
+        emp_coverages  = [aggregated['by_time'][t]['empirical_coverage'] for t in time_steps]
+
+        # ── Plot 1: Coverage over time with IQR band ──────────────────────────
+        ax = axes[0, 0]
+        ax.plot(time_steps, coverage_means, color=_C_COV, linewidth=2, label="Mean coverage")
+        ax.fill_between(time_steps, coverage_q25, coverage_q75,
+                        alpha=0.25, color=_C_COV, label="IQR (25%–75%)")
+        ax.axhline(target_coverage, color=_C_TARGET, linestyle="--", linewidth=1.8,
+                   label=f"Target ({target_coverage:.1%})")
+        ax.set_ylim(0.8, 1.0)
+        ax.set_xlabel("Time step $t$", fontsize=10)
+        ax.set_ylabel("Coverage rate", fontsize=10)
+        ax.set_title(f"Coverage vs. Time  ({self.n_seeds} seeds)", fontsize=10)
+        ax.legend(fontsize=9)
+        ax.grid(True, alpha=0.25)
+        _style_ax(ax)
+
+        # ── Plot 2: Interval width over time with ±1 std band ─────────────────
+        ax = axes[0, 1]
+        wm = np.array(width_means)
+        ws = np.array(width_stds)
+        ax.plot(time_steps, wm, color=_C_WIDTH, linewidth=2)
+        ax.fill_between(time_steps, wm - ws, wm + ws, alpha=0.25, color=_C_WIDTH)
+        ax.set_xlabel("Time step $t$", fontsize=10)
+        ax.set_ylabel("Average interval width", fontsize=10)
+        ax.set_title("Prediction Interval Width vs. Time", fontsize=10)
+        ax.grid(True, alpha=0.25)
+        _style_ax(ax)
+
+        # ── Plot 3: Coverage distribution at early / mid / late ───────────────
+        ax = axes[0, 2]
+        sample_times  = [time_steps[0], time_steps[len(time_steps) // 2], time_steps[-1]]
+        sample_labels = ["Early", "Middle", "Late"]
+        dists = []
         for t in sample_times:
-            coverages_at_t = []
-            for seed, results in self.results_by_seed.items():
-                if t in results:
-                    coverages_at_t.append(results[t]['coverage_rate'])
-            coverage_distributions.append(coverages_at_t)
-        
-        bp = axes[0, 2].boxplot(coverage_distributions, labels=sample_labels, patch_artist=True)
+            dists.append([
+                results[t]['coverage_rate']
+                for results in self.results_by_seed.values()
+                if t in results
+            ])
+        bp = ax.boxplot(dists, labels=sample_labels, patch_artist=True, widths=0.5)
         for patch in bp['boxes']:
-            patch.set_facecolor('lightblue')
-        axes[0, 2].axhline(y=target_coverage, color='red', linestyle='--', linewidth=2)
-        axes[0, 2].set_ylabel('Coverage Rate')
-        axes[0, 2].set_title('Coverage Distribution at Different Time Points')
-        axes[0, 2].grid(True, alpha=0.3, axis='y')
-        
-        # Plot 4: Empirical coverage (pooled) vs nominal
-        empirical_coverages = [aggregated['by_time'][t]['empirical_coverage'] for t in time_steps]
-        
-        axes[1, 0].plot(time_steps, empirical_coverages, 'b-', linewidth=2, label='Empirical (Pooled)')
-        axes[1, 0].plot(time_steps, coverage_means, 'g--', linewidth=1.5, alpha=0.7, label='Mean across seeds')
-        axes[1, 0].axhline(y=target_coverage, color='red', linestyle='--', linewidth=2, label='Target')
-        axes[1, 0].set_xlabel('Time Step t')
-        axes[1, 0].set_ylabel('Coverage Rate')
-        axes[1, 0].set_title('Empirical vs. Mean Coverage')
-        axes[1, 0].legend()
-        axes[1, 0].grid(True, alpha=0.3)
-        axes[1, 0].set_ylim(0.8, 1.0)
-        
-        # Plot 5: Coverage variability across seeds
-        axes[1, 1].plot(time_steps, coverage_stds, 'purple', linewidth=2)
-        axes[1, 1].set_xlabel('Time Step t')
-        axes[1, 1].set_ylabel('Std Dev of Coverage')
-        axes[1, 1].set_title('Coverage Variability Across Seeds')
-        axes[1, 1].grid(True, alpha=0.3)
-        
-        # Plot 6: Summary statistics table
-        axes[1, 2].axis('off')
-        
-        overall = aggregated['overall']
+            patch.set_facecolor(_C_COV)
+            patch.set_alpha(0.5)
+        for element in ('whiskers', 'caps', 'medians', 'fliers'):
+            for line in bp[element]:
+                line.set_color(_C_COV)
+        ax.axhline(target_coverage, color=_C_TARGET, linestyle="--", linewidth=1.8)
+        ax.set_ylabel("Coverage rate", fontsize=10)
+        ax.set_title("Coverage Distribution by Time Point", fontsize=10)
+        ax.grid(True, alpha=0.25, axis="y")
+        _style_ax(ax)
+
+        # ── Plot 4: Empirical (pooled) vs mean-of-seeds coverage ─────────────
+        ax = axes[1, 0]
+        ax.plot(time_steps, emp_coverages, color=_C_COV, linewidth=2,
+                label="Empirical (pooled)")
+        ax.plot(time_steps, coverage_means, color=_C_WIDTH, linewidth=1.5,
+                linestyle="--", alpha=0.8, label="Mean across seeds")
+        ax.axhline(target_coverage, color=_C_TARGET, linestyle="--", linewidth=1.8,
+                   label="Target")
+        ax.set_ylim(0.8, 1.0)
+        ax.set_xlabel("Time step $t$", fontsize=10)
+        ax.set_ylabel("Coverage rate", fontsize=10)
+        ax.set_title("Empirical vs. Mean Coverage", fontsize=10)
+        ax.legend(fontsize=9)
+        ax.grid(True, alpha=0.25)
+        _style_ax(ax)
+
+        # ── Plot 5: Coverage variability across seeds ─────────────────────────
+        ax = axes[1, 1]
+        ax.plot(time_steps, coverage_stds, color=_C_VAR, linewidth=2)
+        ax.set_xlabel("Time step $t$", fontsize=10)
+        ax.set_ylabel("Std dev of coverage", fontsize=10)
+        ax.set_title("Coverage Variability Across Seeds", fontsize=10)
+        ax.grid(True, alpha=0.25)
+        _style_ax(ax)
+
+        # ── Plot 6: Summary statistics table ──────────────────────────────────
+        ax = axes[1, 2]
+        ax.axis("off")
+        overall    = aggregated['overall']
         table_data = [
-            ['Overall Coverage', f"{overall['coverage_mean']:.3f} ± {overall['coverage_std']:.3f}"],
-            ['Target Coverage', f"{target_coverage:.3f}"],
-            ['Coverage Error', f"{overall['coverage_mean'] - target_coverage:+.3f}"],
-            ['Early Coverage', f"{overall['early_coverage_mean']:.3f}"],
-            ['Late Coverage', f"{overall['late_coverage_mean']:.3f}"],
-            ['Degradation', f"{overall['coverage_degradation']:+.3f}"],
-            ['Mean Width', f"{overall['width_mean']:.4f}"],
-            ['Total Predictions', f"{overall['total_predictions']:,}"],
-            ['Seeds', f"{self.n_seeds}"],
+            ["Overall coverage",  f"{overall['coverage_mean']:.3f} ± {overall['coverage_std']:.3f}"],
+            ["Target coverage",   f"{target_coverage:.3f}"],
+            ["Coverage error",    f"{overall['coverage_mean'] - target_coverage:+.3f}"],
+            ["Early coverage",    f"{overall['early_coverage_mean']:.3f}"],
+            ["Late coverage",     f"{overall['late_coverage_mean']:.3f}"],
+            ["Degradation",       f"{overall['coverage_degradation']:+.3f}"],
+            ["Mean width",        f"{overall['width_mean']:.4f}"],
+            ["Total predictions", f"{overall['total_predictions']:,}"],
+            ["Seeds",             f"{self.n_seeds}"],
         ]
-        
-        table = axes[1, 2].table(cellText=table_data, cellLoc='left',
-                                colWidths=[0.5, 0.5], loc='center',
-                                bbox=[0, 0, 1, 1])
-        table.auto_set_font_size(False)
-        table.set_fontsize(10)
-        table.scale(1, 2)
-        
-        # Style the table
+        tbl = ax.table(cellText=table_data, cellLoc="left",
+                       colWidths=[0.55, 0.45], loc="center",
+                       bbox=[0, 0, 1, 1])
+        tbl.auto_set_font_size(False)
+        tbl.set_fontsize(9)
+        tbl.scale(1, 1.9)
         for i in range(len(table_data)):
-            table[(i, 0)].set_facecolor('#E8E8E8')
-            table[(i, 1)].set_facecolor('#F5F5F5')
-        
-        axes[1, 2].set_title('Summary Statistics', fontweight='bold', pad=20)
-        
-        plt.tight_layout()
-        
+            tbl[(i, 0)].set_facecolor("#e8eef4")
+            tbl[(i, 1)].set_facecolor("#f5f7fa")
+        ax.set_title("Summary Statistics", fontweight="bold", fontsize=10, pad=12)
+
+        fig.tight_layout()
         if save_path:
-            plt.savefig(save_path, dpi=300, bbox_inches='tight')
-            print(f"Figure saved to {save_path}")
-        
-        plt.show()
+            out = Path(save_path)
+            out.parent.mkdir(parents=True, exist_ok=True)
+            fig.savefig(out, dpi=200, bbox_inches="tight")
+            print(f"Figure saved to {out}")
     
     def save_results(self, aggregated: Dict, filepath: str):
         """Save aggregated results to JSON file."""
