@@ -67,8 +67,12 @@ import numpy as np
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-from finance_data import load_stored
-from algorithm import AdaptedCAFHT
+import sys
+from pathlib import Path as _Path
+sys.path.insert(0, str(_Path(__file__).resolve().parent.parent))
+
+from finance.finance_data import load_stored
+from core.algorithm import AdaptedCAFHT
 
 # ── Shared plot style ────────────────────────────────────────────────────────
 _C_COV    = "#2166ac"   # coverage line  (blue)
@@ -81,8 +85,8 @@ def _style_ax(ax):
     ax.spines["right"].set_visible(False)
 
 GAMMA_GRID    = [0.001, 0.005, 0.01, 0.05]
-Y_WINDOW      = 30
-X_WINDOW      = 5    # rolling window for X features (0 = full prefix mean)
+Y_WINDOW      = 10
+X_WINDOW      = 0    # rolling window for X features (0 = full prefix mean)
 AR1_MIN_STEPS = 5
 
 
@@ -143,7 +147,8 @@ def _make_featurizer(x_window=X_WINDOW):
             else:
                 X_w = X_prefixes                 # full prefix
             x_means = X_w.mean(axis=1)           # (n, n_cov)
-            return np.concatenate([y_feats, x_means], axis=1)
+            x_stds  = X_w.std(axis=1) + 1e-8    # (n, n_cov)
+            return np.concatenate([y_feats, x_means, x_stds], axis=1)
 
         return y_feats
 

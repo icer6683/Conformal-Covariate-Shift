@@ -56,8 +56,12 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-from finance_data import load_stored
-from adaptive_conformal import OnlineConformalPredictor
+import sys
+from pathlib import Path as _Path
+sys.path.insert(0, str(_Path(__file__).resolve().parent.parent))
+
+from finance.finance_data import load_stored
+from core.adaptive_conformal import OnlineConformalPredictor
 
 # ── Shared plot style ────────────────────────────────────────────────────────
 _C_COV    = "#2166ac"   # coverage line  (blue)

@@ -35,10 +35,14 @@ from pathlib import Path
 from datetime import datetime
 from tqdm import tqdm  # For progress bars (pip install tqdm)
 
-from ts_generator import TimeSeriesGenerator
-from adaptive_conformal import OnlineConformalPredictor
-from algorithm import AdaptedCAFHT
-from test_conformal import run_time_based_coverage_experiment, GAMMA_GRID
+import sys
+from pathlib import Path as _Path
+sys.path.insert(0, str(_Path(__file__).resolve().parent.parent))
+
+from core.ts_generator import TimeSeriesGenerator
+from core.adaptive_conformal import OnlineConformalPredictor
+from core.algorithm import AdaptedCAFHT
+from synthetic.test_conformal import run_time_based_coverage_experiment, GAMMA_GRID
 
 
 class MultiSeedExperiment:
@@ -451,7 +455,7 @@ def main():
                         help='Number of different seeds to run')
     parser.add_argument('--base_seed', type=int, default=1000,
                         help='Starting seed value')
-    parser.add_argument('--save_dir', type=str, default='results',
+    parser.add_argument('--save_dir', type=str, default='results/synthetic',
                         help='Directory to save results')
     
     # Predictor and experiment configuration
@@ -561,44 +565,48 @@ def main():
         'x0_lambda_shift': args.x0_lambda_shift,
     }
     
-    # Create save directory
+    # Create save directories
     save_dir = Path(args.save_dir)
-    save_dir.mkdir(exist_ok=True)
-    
+    json_dir = save_dir / "json"
+    pdf_dir = save_dir / "pdf"
+    json_dir.mkdir(parents=True, exist_ok=True)
+    pdf_dir.mkdir(parents=True, exist_ok=True)
+
     # Create experiment runner
     experiment = MultiSeedExperiment(
         base_config=config,
         n_seeds=args.n_seeds,
         base_seed=args.base_seed
     )
-    
+
     # Run all seeds
     start_time = datetime.now()
     results_by_seed = experiment.run_all_seeds()
     end_time = datetime.now()
-    
+
     print(f"\nTotal runtime: {end_time - start_time}")
-    
+
     # Aggregate results
     aggregated = experiment.aggregate_results()
-    
+
     # Print summary
     experiment.print_summary(aggregated)
-    
+
     # Create timestamp for filenames
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     pred_str = config['predictor']
     shift_str = 'shift' if config['with_shift'] else 'noshift'
-    
+
     # Save results
-    results_file = save_dir / f"results_{pred_str}_{shift_str}_{timestamp}.json"
+    results_file = json_dir / f"results_{pred_str}_{shift_str}_{timestamp}.json"
     experiment.save_results(aggregated, str(results_file))
-    
+
     # Create and save plots
-    plot_file = save_dir / f"plots_{pred_str}_{shift_str}_{timestamp}.png"
+    plot_file = pdf_dir / f"plots_{pred_str}_{shift_str}_{timestamp}.png"
     experiment.plot_aggregated_results(aggregated, save_path=str(plot_file))
-    
-    print(f"\nAll results saved to {save_dir}/")
+
+    print(f"\nJSON saved to {json_dir}/")
+    print(f"Plots saved to {pdf_dir}/")
 
 
 if __name__ == "__main__":

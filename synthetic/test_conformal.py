@@ -69,9 +69,13 @@ _C_ALPHA  = "#7b2d8b"   # ACI alpha           (purple)
 def _style_ax(ax):
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
-from ts_generator import TimeSeriesGenerator
-from adaptive_conformal import OnlineConformalPredictor
-from algorithm import AdaptedCAFHT
+import sys
+from pathlib import Path as _Path
+sys.path.insert(0, str(_Path(__file__).resolve().parent.parent))
+
+from core.ts_generator import TimeSeriesGenerator
+from core.adaptive_conformal import OnlineConformalPredictor
+from core.algorithm import AdaptedCAFHT
 # Candidate ACI stepsizes for gamma selection
 GAMMA_GRID = [0.001, 0.005, 0.01, 0.05, 0.1]
 

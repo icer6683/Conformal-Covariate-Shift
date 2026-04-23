@@ -138,7 +138,11 @@ from pathlib import Path
 import numpy as np
 import matplotlib.pyplot as plt
 
-from algorithm import AdaptedCAFHT
+import sys
+from pathlib import Path as _Path
+sys.path.insert(0, str(_Path(__file__).resolve().parent.parent))
+
+from core.algorithm import AdaptedCAFHT
 
 
 # -- Constants ----------------------------------------------------------------

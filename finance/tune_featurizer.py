@@ -23,14 +23,14 @@ every variant.
 
 Usage
 -----
-  python tune_featurizer.py --npz data/sp500_20240201_20240328.npz
+  python finance/tune_featurizer.py --npz finance/data/sp500_20240201_20240328.npz
 
   # Test only specific variants:
-  python tune_featurizer.py --npz data/sp500_20240201_20240328.npz \\
+  python finance/tune_featurizer.py --npz finance/data/sp500_20240201_20240328.npz \\
       --variants baseline x_full x_std normalize
 
   # Different sector or alpha:
-  python tune_featurizer.py --npz data/sp500_20240701_20240830.npz \\
+  python finance/tune_featurizer.py --npz finance/data/sp500_20240701_20240830.npz \\
       --test_sector Technology --alpha 0.1
 """
 
@@ -41,9 +41,13 @@ from pathlib import Path
 
 import numpy as np
 
-from finance_data import load_stored
-from algorithm import AdaptedCAFHT
-from finance_conformal import (
+import sys
+from pathlib import Path as _Path
+sys.path.insert(0, str(_Path(__file__).resolve().parent.parent))
+
+from finance.finance_data import load_stored
+from core.algorithm import AdaptedCAFHT
+from finance.finance_conformal import (
     LinearCovariateModel,
     _select_gamma,
     GAMMA_GRID,
@@ -75,8 +79,9 @@ VARIANTS = {
     "x_std_ar1":       {"y_window": 30, "x_window":  5, "x_std": True,  "x_ar1": True,  "normalize": False},
 
     # ── Shorter Y window ───────────────────────────────────────────────────────
-    "y_w10":           {"y_window": 10, "x_window":  5, "x_std": False, "x_ar1": False, "normalize": False},
-    "y_w10_x_std":     {"y_window": 10, "x_window":  5, "x_std": True,  "x_ar1": False, "normalize": False},
+    "y_w10":               {"y_window": 10, "x_window":  5, "x_std": False, "x_ar1": False, "normalize": False},
+    "y_w10_x_std":         {"y_window": 10, "x_window":  5, "x_std": True,  "x_ar1": False, "normalize": False},
+    "y_w10_x_full_std":    {"y_window": 10, "x_window":  0, "x_std": True,  "x_ar1": False, "normalize": False},
 
     # ── Z-score normalization ──────────────────────────────────────────────────
     "normalize":       {"y_window": 30, "x_window":  5, "x_std": False, "x_ar1": False, "normalize": True},

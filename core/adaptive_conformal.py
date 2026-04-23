@@ -21,10 +21,14 @@ THEORY: Provides adaptive coverage that adjusts to distribution shifts,
 =============================================================================
 """
 
+import sys
+from pathlib import Path as _Path
+sys.path.insert(0, str(_Path(__file__).resolve().parent.parent))
+
 import numpy as np
 import matplotlib.pyplot as plt
 import argparse
-from ts_generator import TimeSeriesGenerator
+from core.ts_generator import TimeSeriesGenerator
 
 
 class OnlineConformalPredictor:
