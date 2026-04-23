@@ -1,7 +1,5 @@
 # Conformal Prediction with Covariate Shift
 
-> **Status**: Objective section is a placeholder — to be filled in after author clarification.
-
 ---
 
 ## Table of Contents
@@ -9,32 +7,30 @@
 1. [Project Objective](#project-objective)
 2. [Repository Layout](#repository-layout)
 3. [Module Reference](#module-reference)
-   - [ts_generator.py](#ts_generatorpy)
-   - [algorithm.py](#algorithmpy)
-   - [adaptive_conformal.py](#adaptive_conformalpy)
-   - [test_conformal.py](#test_conformalpy)
-   - [multi_seed_experiments.py](#multi_seed_experimentspy)
-   - [finance_data.py](#finance_datapy)
-   - [finance_conformal.py](#finance_conformalpy)
-   - [medical_conformal.py](#medical_conformalpy)
-   - [medical_data.py](#medical_datapy)
+   - [core/ts_generator.py](#corets_generatorpy)
+   - [core/algorithm.py](#corealgorithmpy)
+   - [core/adaptive_conformal.py](#coreadaptive_conformalpy)
+   - [synthetic/test_conformal.py](#synthetictest_conformalpy)
+   - [synthetic/multi_seed_experiments.py](#syntheticmulti_seed_experimentspy)
+   - [finance/finance_data.py](#financefinance_datapy)
+   - [finance/finance_conformal.py](#financefinance_conformalpy)
+   - [medical/medical_conformal.py](#medicalmedical_conformalpy)
 4. [Data Files](#data-files)
 5. [Experimental Results](#experimental-results)
 6. [Quick-Start Commands](#quick-start-commands)
-7. [Medical Experiment Status](#medical-experiment-status)
 
 ---
 
 ## Project Objective
 
-This codebase accompanies a new paper proposing **AdaptedCAFHT** (`algorithm.py`) as an improved conformal prediction algorithm for time series that undergo **covariate shift** at test time.
+This codebase accompanies a new paper proposing **AdaptedCAFHT** (`core/algorithm.py`) as an improved conformal prediction algorithm for time series that undergo **covariate shift** at test time.
 
-**Core claim**: When the covariate distribution shifts between calibration and test, the standard online conformal predictor (`adaptive_conformal.py` — `OnlineConformalPredictor`) loses its nominal coverage guarantee. AdaptedCAFHT restores coverage by re-weighting calibration scores with **density-ratio weights** estimated via logistic regression between the train and test covariate prefixes. It further combines this with **Adaptive Conformal Inference (ACI)** — per-series miscoverage levels that adapt online — making the method robust to both distributional shift and non-stationarity.
+**Core claim**: When the covariate distribution shifts between calibration and test, the standard online conformal predictor (`core/adaptive_conformal.py` — `OnlineConformalPredictor`) loses its nominal coverage guarantee. AdaptedCAFHT restores coverage by re-weighting calibration scores with **density-ratio weights** estimated via logistic regression between the train and test covariate prefixes. It further combines this with **Adaptive Conformal Inference (ACI)** — per-series miscoverage levels that adapt online — making the method robust to both distributional shift and non-stationarity.
 
 **Evaluation structure**:
 - **Synthetic AR(1) setting** — controlled baseline experiments that isolate the effect of covariate shift; `OnlineConformalPredictor` serves as the no-weighting baseline.
 - **Real-world finance application** — S&P 500 daily returns with one GICS sector held out as the test set (sector = natural covariate shift); validates the method on real data.
-- **Real-world medical application** — MIMIC-III sepsis cohort, 24-hour NaCl 0.9% dosage trajectories. Train/Test split is defined by Norepinephrine exposure (induces shift without being used as a covariate). **Implemented single-seed; no saved runs yet.** See [§ Medical Experiment Status](#medical-experiment-status).
+- **Real-world medical application** — MIMIC-III sepsis ICU data; NaCl dosage prediction with Norepinephrine exposure defining the covariate shift.
 
 **Key comparison**: AdaptedCAFHT (with density-ratio weighting) vs. `OnlineConformalPredictor` (no covariate correction), under both no-shift and shift conditions.
 
@@ -44,27 +40,38 @@ This codebase accompanies a new paper proposing **AdaptedCAFHT** (`algorithm.py`
 
 ```
 Conformal-Covariate-Refactor/
-├── algorithm.py                               # Core algorithm: AdaptedCAFHT (weighted conformal + ACI)
-├── adaptive_conformal.py                      # Simpler baseline: OnlineConformalPredictor (no covariate weighting)
-├── ts_generator.py                            # Synthetic AR(1) time series generator with covariate shift
-├── test_conformal.py                          # Single-run coverage experiment (time-based analysis)
-├── multi_seed_experiments.py                  # Multi-seed wrapper for statistical robustness
-├── finance_data.py                            # S&P 500 data loader (yfinance) + save/load utilities
-├── finance_conformal.py                       # Finance experiment: AdaptedCAFHT on S&P 500 sectors
-├── medical_conformal.py                       # Medical experiment: AdaptedCAFHT on sepsis ICU (NaCl target)
-├── medical_data.py                            # Medical: TrainCal-vs-Test covariate-shift visualization
-├── medical_data.md                            # Pickle format + cohort definition documentation
-├── sepsis_experiment_data_nacl_target.pkl     # Preprocessed MIMIC-III sepsis cohort (8600 + 6491 patients)
-├── data/
-│   └── sp500_YYYYMMDD_YYYYMMDD.{npz,json}     # Cached market data (13 date windows)
-└── results/                                   # JSON + PDF outputs (finance populated; medical empty)
+├── core/
+│   ├── algorithm.py              # Core algorithm: AdaptedCAFHT (weighted conformal + ACI)
+│   ├── adaptive_conformal.py     # Baseline: OnlineConformalPredictor (no covariate weighting)
+│   └── ts_generator.py           # Synthetic AR(1) time series generator with covariate shift
+├── synthetic/
+│   ├── test_conformal.py         # Single-run coverage experiment (time-based analysis)
+│   └── multi_seed_experiments.py # Multi-seed wrapper for statistical robustness
+├── finance/
+│   ├── finance_data.py           # S&P 500 data loader (yfinance) + save/load utilities
+│   ├── finance_conformal.py      # Finance experiment: AdaptedCAFHT on S&P 500 sectors
+│   ├── finance_adaptive.py       # Finance baseline: OnlineConformalPredictor (AR(1) only)
+│   ├── tune_featurizer.py        # Grid-search over featurizer variants for LR classifier
+│   ├── plot_covariate_shift.py   # Standalone covariate KDE + KL divergence visualisation
+│   └── data/
+│       └── sp500_YYYYMMDD_YYYYMMDD.{npz,json}   # Cached market data (14 date windows)
+├── medical/
+│   ├── medical_conformal.py      # Sepsis ICU experiment: AdaptedCAFHT with static covariates
+│   ├── medical_data.md           # Data dictionary for the sepsis pickle
+│   └── sepsis_experiment_data_nacl_target.pkl    # Pre-extracted MIMIC-III data
+├── results/
+│   ├── finance/{json,pdf}/       # Finance experiment outputs (13 windows complete)
+│   ├── synthetic/{json,pdf}/     # Synthetic experiment outputs (C1–C4 complete)
+│   └── medical/{json,pdf}/       # Medical experiment outputs (not yet run)
+├── run_finance_experiments.sh    # Shell script to run all finance windows
+└── run_synthetic_experiments.sh  # Shell script to run all synthetic groups
 ```
 
 ---
 
 ## Module Reference
 
-### `ts_generator.py`
+### `core/ts_generator.py`
 
 **Class**: `TimeSeriesGenerator`
 
@@ -96,7 +103,7 @@ Y_t = ar_coef · Y_{t-1} + beta · X_t + trend_coef · t + ε_t,   ε_t ~ N(0, n
 
 ---
 
-### `algorithm.py`
+### `core/algorithm.py`
 
 **Class**: `AdaptedCAFHT`
 
@@ -132,7 +139,7 @@ Uses `sklearn.LogisticRegression` (balanced class weights) if available, otherwi
 
 ---
 
-### `adaptive_conformal.py`
+### `core/adaptive_conformal.py`
 
 **Class**: `OnlineConformalPredictor`
 
@@ -150,7 +157,7 @@ A simpler **online/adaptive** baseline that uses AR(1) on Y only (no covariate w
 
 ---
 
-### `test_conformal.py`
+### `synthetic/test_conformal.py`
 
 Single-run experiment harness. Generates data via `TimeSeriesGenerator`, runs a chosen predictor, and reports **coverage rate and interval width at each time step t = 1, …, T**.
 
@@ -175,7 +182,7 @@ Returns a dict `results_by_time[t]` containing `coverage_rate`, `interval_width`
 
 ---
 
-### `multi_seed_experiments.py`
+### `synthetic/multi_seed_experiments.py`
 
 **Class**: `MultiSeedExperiment`
 
@@ -206,7 +213,7 @@ MultiSeedExperiment.save_results(aggregated, filepath)
 
 ---
 
-### `finance_data.py`
+### `finance/finance_data.py`
 
 Downloads and caches S&P 500 daily OHLCV data from `yfinance`.
 
@@ -241,7 +248,7 @@ Downloads and caches S&P 500 daily OHLCV data from `yfinance`.
 
 ---
 
-### `finance_conformal.py`
+### `finance/finance_conformal.py`
 
 Runs the full `AdaptedCAFHT` pipeline on S&P 500 data.
 
@@ -268,131 +275,47 @@ Returns a results dict with `coverage_by_time`, `width_by_time`, `overall_covera
 
 ---
 
-### `medical_conformal.py`
+### `medical/medical_conformal.py`
 
-**Function**: `run_medical_experiment(data, cal_frac=0.5, alpha=0.1, seed=42, gamma_grid=None, with_shift=False, n_traincal=None, n_test=None)`
+Runs `AdaptedCAFHT` on the MIMIC-III sepsis ICU dataset.
 
-Runs `AdaptedCAFHT` on the MIMIC-III sepsis cohort (`sepsis_experiment_data_nacl_target.pkl`). Target is the 24-hour `NaCl 0.9%` dosage trajectory. Train/Test split is fixed upstream by Norepinephrine exposure; this script further splits TrainCal into Train + Cal via `cal_frac`.
+#### Experiment setup
 
-#### Prediction model — `LinearCovariateModel`
-
-Pooled cross-sectional OLS:
-```
-NaCl_t ≈ β_0 + β_1·HR_t + β_2·RR_t + β_3·O2Sat_t
-       + β_4·Age + β_5·gender_M
-       + β_6·eth_BLACK + β_7·eth_HISPANIC + β_8·eth_ASIAN + β_9·eth_OTHER
-```
-Dynamic covariates vary per (patient, timestep); static covariates are tiled across timesteps for design-matrix assembly.
-
-#### Featurizer for LR classifier (`_richer_featurize_prefixes`, monkey-patched)
-
-26-dimensional feature vector per patient, standardized with training-set `(μ, σ)`:
-
-| Block | Count | Contents |
-|---|---|---|
-| Dynamic summary stats | 5 × 4 = 20 | mean, std, min, max, last over NaCl + 3 CHART covariates |
-| Static | 6 | Age, gender_M, eth_BLACK, eth_HISPANIC, eth_ASIAN, eth_OTHER |
-
-Because `algorithm.py:_featurize_prefixes` only accepts Y prefixes, the caller sets `predictor._X_ctx` and `predictor._S_ctx` before each featurize call.
-
-#### Loop structure (identical pattern to `finance_conformal.py`)
-
-```
-for t in range(T):                              # T = 23 (hours 0..22)
-    fit LinearCovariateModel on train[:, :t+2, :]
-    build calibration scores on cal[:, :t+2, :]
-    (re-select γ every 5 steps via 3-way train-split ACI)
-    if with_shift and t >= 1:
-        cross-split test into two halves
-        for each (predict_half, context_half):
-            train LR classifier: train (label 0) vs context_half (label 1)
-            reweight cal scores with density-ratio weights
-            predict step t+1 for predict_half
-    else:
-        predict step t+1 for all test patients (uniform weights)
-    ACI alpha update per patient: α_{t+1} = α_t + γ·(α − err_t)
-```
-
-#### CLI knobs
-
-| Flag | Default | Purpose |
-|---|---|---|
-| `--pkl` | required | Path to `sepsis_experiment_data_nacl_target.pkl` |
-| `--with_shift` | off | Toggle LR-weighted calibration |
-| `--cal_frac` | 0.5 | Fraction of TrainCal used for calibration |
-| `--alpha` | 0.1 | Miscoverage target (90% coverage) |
-| `--seed` | 42 | Random seed (Train/Cal split, subsampling, γ-selection) |
-| `--gamma_grid` | `[1e-6 … 1e-2]` (9 values) | ACI step-size candidates |
-| `--n_traincal` / `--n_test` | `None` | Random subsample for faster iteration |
-| `--save_json` / `--save_plot` | `None` | Output paths |
+1. **Data**: Pre-extracted pickle (`medical/sepsis_experiment_data_nacl_target.pkl`); 8600 TrainCal + 6491 Test patients, 24 hourly steps each.
+2. **Split**: TrainCal = patients with no Norepinephrine exposure; Test = patients with any Norepinephrine. Covariate shift is driven by differing fluid management under vasopressor therapy.
+3. **Model**: `LinearCovariateModel` — cross-sectional OLS of `NaCl_t` on dynamic vitals (HR, RR, O2Sat) and static demographics (Age, gender, ethnicity).
+4. **Featurizer**: `_richer_featurize_prefixes` — 5 stats × 4 dynamic variables + 6 static features (26 total); standardised per time step.
+5. **Gamma selection**: every 5 steps from `gamma_grid = [1e-6, 5e-6, ..., 1e-2]` (finer than finance/synthetic).
+6. **Shift correction** (`--with_shift`): density-ratio weights via logistic regression on the 26-feature prefixes.
 
 #### Output
 
-Returns a results dict with `coverage_by_time`, `width_by_time`, `overall_coverage`, `target_coverage`, `gamma_opt_history`, `first_test_patient`, `first_test_series`, and a `config` block.
-
----
-
-### `medical_data.py`
-
-**Function**: `visualize(data, show_static=False, show_dynamic=False, show_target=False, save_path=None)`
-
-Standalone covariate-shift inspection tool. Compares TrainCal vs. Test distributions on the sepsis cohort.
-
-| Flag | Produces |
-|---|---|
-| `--static` | Side-by-side bar charts for Age bins, Gender M/F, Ethnicity groups |
-| `--dynamic` | Three mean-trajectory lines (Heart Rate, Respiratory Rate, O2 saturation) |
-| `--target` | One mean-trajectory line for NaCl 0.9% |
-| `--save_plot` | Output path (PDF or PNG) |
-
-Up to 7 panels; useful for Section 5.3 motivating figures.
+Returns `coverage_by_time`, `width_by_time`, `overall_coverage`, `gamma_opt_history`, and first test patient's true/lower/upper NaCl trajectory. No results have been run yet.
 
 ---
 
 ## Data Files
 
-### Cached S&P 500 data (`.npz` + `.json` pairs)
+### Cached S&P 500 data (`finance/data/`)
 
-Thirteen date windows are cached locally, spanning Jan 2023 – Feb 2025:
+Fourteen date windows are cached locally, spanning Oct 2023 – Feb 2025. Pass paths as `finance/data/sp500_DATES.npz`.
 
-| File stem | Date range |
-|---|---|
-| `sp500_20231004_20240328` | Oct 2023 – Mar 2024 |
-| `sp500_20240102_20240229` | Jan – Feb 2024 |
-| `sp500_20240201_20240328` | Feb – Mar 2024 |
-| `sp500_20240301_20240430` | Mar – Apr 2024 |
-| `sp500_20240401_20240531` | Apr – May 2024 |
-| `sp500_20240501_20240628` | May – Jun 2024 |
-| `sp500_20240603_20240731` | Jun – Jul 2024 |
-| `sp500_20240701_20240830` | Jul – Aug 2024 |
-| `sp500_20240801_20240930` | Aug – Sep 2024 |
-| `sp500_20240903_20241031` | Sep – Oct 2024 |
-| `sp500_20241001_20241129` | Oct – Nov 2024 |
-| `sp500_20241101_20241231` | Nov – Dec 2024 |
-| `sp500_20241202_20250131` | Dec 2024 – Jan 2025 |
-| `sp500_20250102_20250228` | Jan – Feb 2025 |
-
-### Sepsis-ICU pickle (`sepsis_experiment_data_nacl_target.pkl`)
-
-Preprocessed MIMIC-III sepsis cohort. Full format is documented in `medical_data.md`. Summary:
-
-| Key | Type | Description |
+| File stem | Date range | Used in experiments |
 |---|---|---|
-| `patient_ids_traincal` | `list` | 8600 patient IDs with no Norepinephrine exposure |
-| `patient_trajectory_list_traincal` | `list[dict]` | Aligned patient dicts (same order as IDs) |
-| `patient_ids_test` | `list` | 6491 patient IDs with any Norepinephrine exposure |
-| `patient_trajectory_list_test` | `list[dict]` | Aligned patient dicts |
-
-Each patient dict:
-
-| Key | Type | Shape |
-|---|---|---|
-| `Age` / `gender` / `ethnicity` | scalars | per patient |
-| `Heart Rate`, `Respiratory Rate`, `O2 saturation pulseoxymetry` | `pd.DataFrame` | 24×2 (`hour`, `value`) |
-| `NaCl 0.9% (target)` | `pd.DataFrame` | 24×2 — the prediction target |
-| `Norepinephrine` | `pd.DataFrame` | 24×2 — kept for reference only; *not* a model covariate |
-
-Imputation rule: CHART zeros → per-patient median of nonzero values; NaCl zeros kept as-is (sparse signal).
+| `sp500_20231004_20240328` | Oct 2023 – Mar 2024 | Excluded (long overlapping window) |
+| `sp500_20240102_20240229` | Jan – Feb 2024 | Yes |
+| `sp500_20240201_20240328` | Feb – Mar 2024 | Yes (also mixed-sector baseline) |
+| `sp500_20240301_20240430` | Mar – Apr 2024 | Yes |
+| `sp500_20240401_20240531` | Apr – May 2024 | Yes |
+| `sp500_20240501_20240628` | May – Jun 2024 | Yes |
+| `sp500_20240603_20240731` | Jun – Jul 2024 | Yes |
+| `sp500_20240701_20240830` | Jul – Aug 2024 | Yes |
+| `sp500_20240801_20240930` | Aug – Sep 2024 | Yes |
+| `sp500_20240903_20241031` | Sep – Oct 2024 | Yes |
+| `sp500_20241001_20241129` | Oct – Nov 2024 | Yes |
+| `sp500_20241101_20241231` | Nov – Dec 2024 | Yes |
+| `sp500_20241202_20250131` | Dec 2024 – Jan 2025 | Yes |
+| `sp500_20250102_20250228` | Jan – Feb 2025 | Yes |
 
 ---
 
@@ -405,6 +328,8 @@ All synthetic experiments use: α = 0.1 (target 90% coverage), AR coef α_Y = 0.
 ### Synthetic Comparison: AdaptedCAFHT vs OnlineConformalPredictor (30 seeds each)
 
 **Setup**: n_series = 300, n_train = 600, n_cal = 600, T = 20, 30 random seeds.
+
+**Files**: `results/synthetic/json/results_{algorithm,adaptive}_{shift,noshift}_20260414_*.json`
 
 #### Overall summary
 
@@ -450,21 +375,13 @@ The critical comparison is the **recovery trajectory** after the initial coverag
 
 ---
 
-### Earlier Single-Seed Results (for reference)
+### Finance Experiments — S&P 500 (AdaptedCAFHT on real data, 13 windows complete)
 
-**File**: `results/results_algorithm_noshift_20260302_144653.json` — AdaptedCAFHT, no shift, 1 seed, T=40, n_series=500. Overall coverage: **89.94%**, mean width 1.077.
+**Setup**: Technology sector held out as test; remaining tickers split 50/50 into train and calibration. α = 0.1 (target 90%). Rich featurizer (`_featurize_YX_summaries`) computes Y rolling-window statistics + mean covariate values.
 
-**File**: `results/results_algorithm_shift_20260203_120324.json` — AdaptedCAFHT, with shift (rate 1→2), T=100, n_series=500. Overall coverage: **91.0%**, mean width 2.170.
+**Files**: `results/finance/json/finance_tech_{shift,noshift}_DATES.json` + corresponding PDFs in `results/finance/pdf/`.
 
----
-
-### Finance Experiments — S&P 500 (AdaptedCAFHT on real data)
-
-**Setup**: `sp500_20240201_20240328.npz` (Feb–Mar 2024, 40 trading days). One GICS sector held out as test; remaining tickers split 50/50 into train and calibration. α = 0.1 (target 90%). The rich featurizer (`_featurize_YX_summaries`) computes Y rolling-window statistics + mean covariate values over the prefix. Covariates were selected to differentiate the Technology sector.
-
-> Note: covariates (`OvernightGapReturn`, `Above52wLowReturn`, `TurnoverRatio_lag1`, `DailyRangeReturn_lag1`) are designed for Technology sector differentiation. Results on other sectors are secondary.
-
-#### Technology sector (designed test case)
+#### Technology sector (designed test case) — illustrative window: Feb–Mar 2024
 
 | Condition | train/cal/test | Overall coverage | Error | Mean width | Early cov. | Late cov. |
 |---|---|---|---|---|---|---|
@@ -472,26 +389,16 @@ The critical comparison is the **recovery trajectory** after the initial coverag
 | AdaptedCAFHT, no shift correction | 199/198/72 | **87.54%** | −2.46% | 0.0432 | 88.25% | 89.21% |
 | **Improvement from shift correction** | — | **+0.60%** | +0.60pp | +2.8% | +1.07pp | +0.53pp |
 
-**Per-time-step highlights** (Technology, diff = with_shift − no_shift):
+At t=3 (first step with fully engaged density-ratio weights), shift correction prevents a coverage collapse: 84.7% vs 76.4% — an 8.3% improvement in a single time step.
 
-| t | with_shift | no_shift | diff |
-|---|---|---|---|
-| 3 | **84.7%** | 76.4% | **+8.3%** ← largest improvement |
-| 4 | 94.4% | 93.1% | +1.4% |
-| 6 | 86.1% | 84.7% | +1.4% |
-| 11 | 88.9% | 87.5% | +1.4% |
-| 33 | 87.5% | 84.7% | +2.8% |
-| 38 | 77.8% | 76.4% | +1.4% |
+#### Mixed-sector null baseline (Feb–Mar 2024)
 
-At t=3, the first step where the density-ratio weighting is fully engaged with two-step Y prefix features, the shift correction prevents a coverage collapse from 76.4% to 84.7% — an 8.3% improvement in a single time step. At all other steps the correction is non-negative (never hurts), with modest consistent improvement.
+| Condition | Overall coverage | Error |
+|---|---|---|
+| AdaptedCAFHT + weighting | ~90% | near zero |
+| AdaptedCAFHT, no weighting | ~90% | near zero |
 
-#### Healthcare sector (secondary, different covariate fit)
-
-| Condition | train/cal/test | Overall coverage | Error | Mean width |
-|---|---|---|---|---|
-| AdaptedCAFHT + shift correction | 206/205/58 | 90.76% | +0.76% | 0.0441 |
-
-Healthcare slightly over-covers (+0.76%), which is expected — the covariates were designed for Technology, so the density-ratio correction applies some adjustment that is less precisely targeted but still non-harmful.
+Under no actual covariate shift, both methods perform equivalently — the weighting correction is harmless.
 
 ---
 
@@ -506,23 +413,23 @@ Healthcare slightly over-covers (+0.76%), which is expected — the covariates w
 
 ```bash
 # Single run, no shift, algorithm predictor
-MPLBACKEND=Agg $PYTHON test_conformal.py --predictor algorithm --n_series 300
+MPLBACKEND=Agg $PYTHON synthetic/test_conformal.py --predictor algorithm --n_series 300
 
 # Single run, with covariate shift
-MPLBACKEND=Agg $PYTHON test_conformal.py --predictor algorithm --with_shift --n_series 300
+MPLBACKEND=Agg $PYTHON synthetic/test_conformal.py --predictor algorithm --with_shift --n_series 300
 
-# 4-way comparison (proposed vs baseline × shift vs no shift), 30 seeds each
-MPLBACKEND=Agg $PYTHON multi_seed_experiments.py --predictor algorithm --n_seeds 30 \
-    --n_series 300 --n_train 600 --n_cal 600 --T 20 --with_shift --save_dir results
-MPLBACKEND=Agg $PYTHON multi_seed_experiments.py --predictor algorithm --n_seeds 30 \
-    --n_series 300 --n_train 600 --n_cal 600 --T 20 --save_dir results
-MPLBACKEND=Agg $PYTHON multi_seed_experiments.py --predictor adaptive --n_seeds 30 \
-    --n_series 300 --n_train 600 --n_cal 600 --T 20 --with_shift --save_dir results
-MPLBACKEND=Agg $PYTHON multi_seed_experiments.py --predictor adaptive --n_seeds 30 \
-    --n_series 300 --n_train 600 --n_cal 600 --T 20 --save_dir results
+# Multi-seed run (AdaptedCAFHT, with shift)
+MPLBACKEND=Agg $PYTHON synthetic/multi_seed_experiments.py --predictor algorithm --n_seeds 30 \
+    --n_series 300 --n_train 600 --n_cal 600 --T 20 --with_shift \
+    --save_dir results/synthetic
+
+# Multi-seed run (OnlineConformalPredictor, no shift)
+MPLBACKEND=Agg $PYTHON synthetic/multi_seed_experiments.py --predictor adaptive --n_seeds 30 \
+    --n_series 300 --n_train 600 --n_cal 600 --T 20 \
+    --save_dir results/synthetic
 
 # Dynamic covariates with shift
-MPLBACKEND=Agg $PYTHON test_conformal.py --predictor algorithm --covariate_mode dynamic \
+MPLBACKEND=Agg $PYTHON synthetic/test_conformal.py --predictor algorithm --covariate_mode dynamic \
     --with_shift --x_rate 0.6 --x_rate_shift 0.9
 ```
 
@@ -530,72 +437,36 @@ MPLBACKEND=Agg $PYTHON test_conformal.py --predictor algorithm --covariate_mode 
 
 ```bash
 # Step 1: pull data (once — ~30 min for all 500 tickers)
-MPLBACKEND=Agg $PYTHON finance_data.py --pull --start 2024-02-01 --end 2024-03-28
+MPLBACKEND=Agg $PYTHON finance/finance_data.py --pull --start 2024-02-01 --end 2024-03-28
 
-# Step 2: run experiment (Technology sector as test, no shift)
-MPLBACKEND=Agg $PYTHON finance_conformal.py --npz sp500_20240201_20240328.npz \
-    --test_sector Technology --save_json results/finance_tech_noshift.json
+# Step 2: run experiment (Technology sector as test, no shift correction)
+MPLBACKEND=Agg $PYTHON finance/finance_conformal.py \
+    --npz finance/data/sp500_20240201_20240328.npz \
+    --test_sector Technology \
+    --save_json results/finance/json/finance_tech_noshift_20240201_20240328.json \
+    --save_plot results/finance/pdf/finance_tech_noshift_20240201_20240328.pdf
 
 # Step 2 (with shift correction)
-MPLBACKEND=Agg $PYTHON finance_conformal.py --npz sp500_20240201_20240328.npz \
+MPLBACKEND=Agg $PYTHON finance/finance_conformal.py \
+    --npz finance/data/sp500_20240201_20240328.npz \
     --test_sector Technology --with_shift \
-    --save_json results/finance_tech_shift.json \
-    --save_plot results/finance_tech_shift.png
+    --save_json results/finance/json/finance_tech_shift_20240201_20240328.json \
+    --save_plot results/finance/pdf/finance_tech_shift_20240201_20240328.pdf
+
+# Run all 13 windows (uses run_finance_experiments.sh)
+bash run_finance_experiments.sh
 ```
 
-### Medical experiments
+### Medical experiment
 
 ```bash
-# Covariate-shift visualization (TrainCal vs Test bars + trajectories)
-MPLBACKEND=Agg $PYTHON medical_data.py \
-    --pkl sepsis_experiment_data_nacl_target.pkl \
-    --static --dynamic --target \
-    --save_plot results/medical_covariate_shift.pdf
+# With shift correction (AdaptedCAFHT + LR weighting)
+MPLBACKEND=Agg $PYTHON medical/medical_conformal.py --with_shift \
+    --save_json results/medical/json/medical_shift.json \
+    --save_plot results/medical/pdf/medical_shift.png
 
-# No shift correction (baseline)
-MPLBACKEND=Agg $PYTHON medical_conformal.py \
-    --pkl sepsis_experiment_data_nacl_target.pkl \
-    --save_json results/medical_nacl_noshift.json \
-    --save_plot results/medical_nacl_noshift.pdf
-
-# With LR covariate-shift correction
-MPLBACKEND=Agg $PYTHON medical_conformal.py \
-    --pkl sepsis_experiment_data_nacl_target.pkl --with_shift \
-    --save_json results/medical_nacl_shift.json \
-    --save_plot results/medical_nacl_shift.pdf
-
-# Fast smoke-test (subsampled cohort)
-MPLBACKEND=Agg $PYTHON medical_conformal.py \
-    --pkl sepsis_experiment_data_nacl_target.pkl --with_shift \
-    --n_traincal 500 --n_test 300
+# Without shift correction (uniform weights, ACI only)
+MPLBACKEND=Agg $PYTHON medical/medical_conformal.py \
+    --save_json results/medical/json/medical_noshift.json \
+    --save_plot results/medical/pdf/medical_noshift.png
 ```
-
----
-
-## Medical Experiment Status
-
-**State**: pipeline implemented, no runs committed.
-
-### Completed
-- Data loader + 3-dynamic + 6-static array converter ([medical_conformal.py:231](medical_conformal.py#L231) `_convert_to_arrays`; [medical_data.md](medical_data.md) documents the pickle).
-- Ethnicity grouping (30+ MIMIC strings → {WHITE, BLACK, HISPANIC, ASIAN, OTHER}; 4-dim one-hot).
-- `LinearCovariateModel` with static covariates tiled into the design matrix ([medical_conformal.py:443](medical_conformal.py#L443)).
-- Monkey-patched 26-dim LR featurizer (20 dynamic stats + 6 static), standardized with training-set stats ([medical_conformal.py:303](medical_conformal.py#L303) `_richer_featurize_prefixes`).
-- Cross-half test split for LR weighting ([medical_conformal.py:753-892](medical_conformal.py#L753)).
-- Gamma selection via 3-way training split, re-run every 5 steps ([medical_conformal.py:505](medical_conformal.py#L505) `_select_gamma`; `GAMMA_GRID` at line 191).
-- Single-seed `with_shift` / `no_shift` runner ([medical_conformal.py:593](medical_conformal.py#L593) `run_medical_experiment`, CLI at line 1021).
-- Patient subsampling via `--n_traincal` / `--n_test`.
-- Covariate-shift visualization (3 bar charts + 4 trajectory plots) ([medical_data.py:217](medical_data.py#L217) `visualize`).
-
-### Not implemented
-- Multi-seed wrapper (seeds vary the Train/Cal split within TrainCal; Train/Test split is fixed).
-- Baselines on medical data: plain split conformal, `OnlineConformalPredictor`, Weighted-CAFHT-without-ACI.
-- Shell runner `run_medical_experiments.sh`.
-- LaTeX tables / paper-ready PDFs.
-- Any saved runs in `results/` (currently zero `medical_*` / `sepsis_*` / `nacl_*` files).
-
-### Known non-trivial design choices
-- `GAMMA_GRID = [1e-6 … 1e-2]` (wider than finance) — NaCl residual scale is hundreds of mL and the target is sparse, so small γ is needed.
-- Gamma re-selected every **5** steps (finance/synthetic use **10**) — the horizon is shorter (T=23) so more frequent updates are reasonable.
-- Norepinephrine is *not* used as a predictive covariate — only to define the Train/Test split. This is the only source of covariate shift and it is a fixed property of the cohort (no knob).
-

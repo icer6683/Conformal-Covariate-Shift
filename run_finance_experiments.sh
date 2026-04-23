@@ -12,17 +12,19 @@
 #
 # Excluded: sp500_20231004_20240328.npz (long overlapping window)
 #
-# Outputs saved to: results/
-#   finance_tech_shift_DATES.json/.pdf
-#   finance_tech_noshift_DATES.json/.pdf
-#   finance_mixed_withweighting.json/.pdf
-#   finance_mixed_noweighting.json/.pdf
+# Outputs saved to: results/finance/
+#   json/finance_tech_shift_DATES.json
+#   json/finance_tech_noshift_DATES.json
+#   pdf/finance_tech_shift_DATES.pdf
+#   pdf/finance_tech_noshift_DATES.pdf
+#   json/finance_mixed_withweighting.json / pdf/finance_mixed_withweighting.pdf
+#   json/finance_mixed_noweighting.json  / pdf/finance_mixed_noweighting.pdf
 # =============================================================================
 
 set -e
-DATA=data
-RESULTS=results
-mkdir -p "$RESULTS"
+DATA=finance/data
+RESULTS=results/finance
+mkdir -p "$RESULTS/json" "$RESULTS/pdf"
 
 NPZ_FILES=(
     $DATA/sp500_20240102_20240229.npz
@@ -48,7 +50,7 @@ for NPZ in "${NPZ_FILES[@]}"; do
         continue
     fi
 
-    # Extract date suffix: data/sp500_20240102_20240229.npz -> 20240102_20240229
+    # Extract date suffix: finance/data/sp500_20240102_20240229.npz -> 20240102_20240229
     BASENAME=$(basename "$NPZ" .npz)   # sp500_20240102_20240229
     DATES="${BASENAME#sp500_}"         # 20240102_20240229
 
@@ -59,22 +61,22 @@ for NPZ in "${NPZ_FILES[@]}"; do
 
     # Tech WITH shift correction
     echo "  [1/2] Technology test, WITH LR weighting..."
-    python finance_conformal.py \
+    python finance/finance_conformal.py \
         --npz "$NPZ" \
         --test_sector Technology \
         --with_shift \
         --seed 42 \
-        --save_json "$RESULTS/finance_tech_shift_${DATES}.json" \
-        --save_plot "$RESULTS/finance_tech_shift_${DATES}.pdf"
+        --save_json "$RESULTS/json/finance_tech_shift_${DATES}.json" \
+        --save_plot "$RESULTS/pdf/finance_tech_shift_${DATES}.pdf"
 
     # Tech WITHOUT shift correction
     echo "  [2/2] Technology test, uniform weights (no shift correction)..."
-    python finance_conformal.py \
+    python finance/finance_conformal.py \
         --npz "$NPZ" \
         --test_sector Technology \
         --seed 42 \
-        --save_json "$RESULTS/finance_tech_noshift_${DATES}.json" \
-        --save_plot "$RESULTS/finance_tech_noshift_${DATES}.pdf"
+        --save_json "$RESULTS/json/finance_tech_noshift_${DATES}.json" \
+        --save_plot "$RESULTS/pdf/finance_tech_noshift_${DATES}.pdf"
 
 done
 
@@ -87,21 +89,21 @@ echo "  Mixed-sector null baseline  ($MIXED_NPZ)"
 echo "============================================================"
 
 echo "  [1/2] Mixed test set, WITH LR weighting..."
-python finance_conformal.py \
+python finance/finance_conformal.py \
     --npz "$MIXED_NPZ" \
     --mixed \
     --with_shift \
     --seed 42 \
-    --save_json "$RESULTS/finance_mixed_withweighting.json" \
-    --save_plot "$RESULTS/finance_mixed_withweighting.pdf"
+    --save_json "$RESULTS/json/finance_mixed_withweighting.json" \
+    --save_plot "$RESULTS/pdf/finance_mixed_withweighting.pdf"
 
 echo "  [2/2] Mixed test set, uniform weights..."
-python finance_conformal.py \
+python finance/finance_conformal.py \
     --npz "$MIXED_NPZ" \
     --mixed \
     --seed 42 \
-    --save_json "$RESULTS/finance_mixed_noweighting.json" \
-    --save_plot "$RESULTS/finance_mixed_noweighting.pdf"
+    --save_json "$RESULTS/json/finance_mixed_noweighting.json" \
+    --save_plot "$RESULTS/pdf/finance_mixed_noweighting.pdf"
 
 echo ""
 echo "All finance experiments complete. Results in $RESULTS/"

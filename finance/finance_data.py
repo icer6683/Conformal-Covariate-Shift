@@ -41,6 +41,8 @@ STORAGE FORMAT
   Default stem: sp500_YYYYMMDD_YYYYMMDD  e.g. sp500_20240101_20240301
 """
 
+from __future__ import annotations
+
 import argparse
 import json
 import time
@@ -49,7 +51,6 @@ from typing import Optional
 
 import numpy as np
 import pandas as pd
-import yfinance as yf
 
 
 # ============================================================
@@ -398,6 +399,7 @@ def summarize(result: dict) -> None:
 # ============================================================
 
 def _download_all(tickers, start, end, interval) -> dict[str, pd.DataFrame]:
+    import yfinance as yf  # lazy import — only needed for data pulls
     data = {}
     for ticker in tickers:
         try:
@@ -444,6 +446,7 @@ def _fetch_52w_lows(tickers: list[str], start: str, interval: str = "1d") -> dic
     This gives a price-level-independent anchor for Above52wLowReturn that uses
     only pre-sample data, avoiding any look-ahead bias.
     """
+    import yfinance as yf  # lazy import — only needed for data pulls
     import datetime
     end_pre   = pd.Timestamp(start)
     start_pre = end_pre - pd.DateOffset(years=1, days=30)   # ~14 months to ensure 252 days
@@ -531,6 +534,7 @@ def _build_covariates(df: pd.DataFrame, extra: bool,
 
 
 def _fetch_metadata(tickers: list[str]) -> list[dict]:
+    import yfinance as yf  # lazy import — only needed for data pulls
     meta = []
     for ticker in tickers:
         entry = {"ticker": ticker, "sector": "N/A", "industry": "N/A",

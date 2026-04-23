@@ -39,7 +39,11 @@ import matplotlib.pyplot as plt
 import numpy as np
 from scipy.stats import gaussian_kde
 
-from finance_data import load_stored, filter_by_sector
+import sys
+from pathlib import Path as _Path
+sys.path.insert(0, str(_Path(__file__).resolve().parent.parent))
+
+from finance.finance_data import load_stored, filter_by_sector
 
 
 # ── Clip percentiles to remove extreme outliers for cleaner visuals ──────────
@@ -181,7 +185,7 @@ def main():
         fig.savefig(out, dpi=200, bbox_inches="tight")
         print(f"\n[SAVED] {out}")
     else:
-        out = Path("results/covariate_shift.png")
+        out = Path("results/finance/pdf/covariate_shift.png")
         out.parent.mkdir(parents=True, exist_ok=True)
         fig.savefig(out, dpi=200, bbox_inches="tight")
         print(f"\n[SAVED] {out}")
