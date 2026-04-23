@@ -26,6 +26,10 @@ Target coverage guarantee: P(Y^{n+1}_t ∈ Ĉ_t, ∀t ∈ [T]) ≥ 1 − α.
 | `finance_conformal.py` | S&P 500 experiment using `AdaptedCAFHT` with linear covariate model |
 | `finance_adaptive.py` | S&P 500 experiment using `OnlineConformalPredictor` (AR(1) only, no covariates) |
 | `plot_covariate_shift.py` | Standalone covariate distribution visualization |
+| `medical_conformal.py` | Sepsis-ICU experiment using `AdaptedCAFHT` with linear model on 3 dynamic CHART covariates + 3 static covariates (Age, gender, ethnicity); target = NaCl 0.9% trajectory |
+| `medical_data.py` | Sepsis-ICU covariate-shift visualization (bar charts for static + mean trajectories for dynamic/target) |
+| `medical_data.md` | Documentation of `sepsis_experiment_data_nacl_target.pkl` format and cohort definition |
+| `sepsis_experiment_data_nacl_target.pkl` | Preprocessed MIMIC-III sepsis cohort (8600 TrainCal, 6491 Test patients) |
 | `results/` | Output PNGs and JSON files |
 
 ---
@@ -54,6 +58,14 @@ Target coverage guarantee: P(Y^{n+1}_t ∈ Ĉ_t, ∀t ∈ [T]) ≥ 1 − α.
 - Sector split: Technology = test, remaining = train+cal (50/50 split)
 - Mixed mode (`--mixed`): random 15% draw of all tickers as test (null no-shift baseline)
 
+### Sepsis ICU medical data (`sepsis_experiment_data_nacl_target.pkl`)
+Source: MIMIC-III sepsis cohort, 24 hourly timestamps per patient, 8600 TrainCal + 6491 Test. Full format documented in `medical_data.md`.
+- Y (target): `NaCl 0.9% (target)` — hourly mL dosage trajectory. Zeros preserved (sparse medication signal).
+- X (3 dynamic CHART covariates): `Heart Rate`, `Respiratory Rate`, `O2 saturation pulseoxymetry`. Zero entries imputed with per-patient median of nonzero values; patients with all-zero trajectory excluded upstream.
+- S (3 static covariates, encoded to 6 dims): `Age` (numeric), `gender` (M→1, F→0), `ethnicity` (30+ raw categories → 5 groups {WHITE, BLACK, HISPANIC, ASIAN, OTHER}; one-hot, WHITE reference).
+- Train/Test split: defined by upstream Norepinephrine exposure — TrainCal = no Norepinephrine, Test = any Norepinephrine. Norepinephrine is *not* used as a model covariate; it only induces the shift.
+- Covariate shift is a fixed property of the cohort (no knob).
+
 ---
 
 ## Methods implemented
@@ -66,6 +78,8 @@ Single class implementing the full proposed method. Three stages at each time st
 3. **Weighted quantile**: prediction interval = [Ŷ_{t+1} − q, Ŷ_{t+1} + q] where q is the weighted (1−α_t)-quantile.
 
 In finance experiments, Step 1 is replaced by a linear regression on the 4 S&P 500 covariates (OLS, pooled across all training tickers and all time steps).
+
+In medical experiments (`medical_conformal.py:LinearCovariateModel`), Step 1 is a pooled cross-sectional OLS regressing NaCl_t on the 3 dynamic covariates plus the 6 encoded static features (intercept + 3 + 6 = 10 coefficients). Static covariates are tiled across timesteps for design-matrix assembly.
 
 ### Likelihood-ratio estimation (`algorithm.py:_compute_density_ratio_weights`)
 - Label train series as class 0, (half of) test series as class 1
@@ -85,6 +99,13 @@ When `--with_shift` is set, `_featurize_YX_summaries` replaces the default last-
 - Y features: mean, std, AR(1) coefficient over last 30 steps
 - X features: temporal mean of each covariate over full prefix
 - Injected via `types.MethodType` without subclassing
+
+### Medical featurizer (monkey-patched at runtime)
+`medical_conformal.py:_richer_featurize_prefixes` replaces the default featurizer with a 26-dim feature vector:
+- 5 summary stats (mean, std, min, max, last) over the NaCl prefix and each of the 3 dynamic covariates → 20 features
+- 6 static features (Age, gender_M, 4 ethnicity dummies) appended verbatim
+- Standardized using training-set mean/std; the same `(mu, std)` is reused for calibration and test so distributional differences are preserved.
+- Auxiliary arrays `predictor._X_ctx` and `predictor._S_ctx` are set by the caller before each featurize call, since `algorithm.py:_featurize_prefixes` only accepts Y prefixes.
 
 ### ACI adaptive update
 α^{(i)}_{t+1} = α^{(i)}_t + γ·(α − 1[Y^{(i)}_{t+1} ∉ Ĉ^{(i)}_{t+1}])
@@ -130,6 +151,14 @@ Every 10 time steps, 3-way split of training data:
 - α=0.1, cal_frac=0.5, seed=42, Y_window=30
 - gamma_grid=[0.001, 0.005, 0.01, 0.05]
 
+### Medical (sepsis ICU)
+- α=0.1, cal_frac=0.5, seed=42
+- T=23 prediction steps (hours 0..22 predicting 1..23); 24 hourly timestamps
+- gamma_grid=[1e-6, 5e-6, 1e-5, 5e-5, 1e-4, 5e-4, 1e-3, 5e-3, 1e-2] (wider than finance because NaCl residual scale is much larger — hundreds of mL — and sparsity makes small γ more appropriate)
+- Gamma re-selected every 5 steps (not 10 as in synthetic/finance)
+- Single-seed only — no multi-seed wrapper currently exists
+- `--n_traincal` / `--n_test` subsample full cohort for faster iteration
+
 ---
 
 ## Results currently available (post-cleanup, 2026-04-22)
@@ -151,6 +180,9 @@ All S&P 500 data files are in `data/`. Pass as `data/sp500_DATES.npz` to all scr
 | `results/covariate_shift.png` | Tech vs. non-Tech covariate KDE (motivating figure, needs PDF) |
 
 All other results files were deleted (stale single-seed runs and duplicate configs).
+
+### Medical (sepsis ICU)
+No saved runs. `results/` currently contains zero files matching `medical_*`, `sepsis_*`, or `nacl_*`. All medical runs to date have been interactive / not committed.
 
 ---
 
@@ -187,6 +219,20 @@ Mixed-sector null baseline: data/sp500_20240201_20240328.npz only (illustrative)
   C5: algorithm, dynamic, with_shift    (x_rate=0.6, x_rate_shift=0.9)
   C6: algorithm, dynamic, no shift      (x_rate=0.6)
 All with --n_seeds 100, save JSON aggregation files.
+
+### Medical experiments — NO shell runner yet
+Minimum viable runs (single-seed, seed=42):
+  M1: medical, with_shift
+      python medical_conformal.py --pkl sepsis_experiment_data_nacl_target.pkl --with_shift \
+          --save_json results/medical_nacl_shift.json \
+          --save_plot results/medical_nacl_shift.pdf
+  M2: medical, no shift
+      python medical_conformal.py --pkl sepsis_experiment_data_nacl_target.pkl \
+          --save_json results/medical_nacl_noshift.json \
+          --save_plot results/medical_nacl_noshift.pdf
+  M3: covariate-shift visualization
+      python medical_data.py --pkl sepsis_experiment_data_nacl_target.pkl \
+          --static --dynamic --target --save_plot results/medical_covariate_shift.pdf
 
 ---
 
@@ -228,7 +274,12 @@ E2: Healthcare vs. rest KDE + KL divergence
 7. **Vector figure output** — all figures should be saved as PDF not PNG.
 
 ### Structural
-8. **Medical data (Section 5.3)** — explicitly "To be added" in technical note; no data/code exist.
+8. **Medical data (Section 5.3)** — pipeline implemented (`medical_conformal.py`, `medical_data.py`, `sepsis_experiment_data_nacl_target.pkl`) but **no runs are saved** in `results/` and **no multi-seed wrapper / baselines / shell runner** exist yet. Technical-note section 5.3 still reads "To be added".
+   Remaining work:
+   - (a) Run M1/M2/M3 above and commit outputs.
+   - (b) Build multi-seed wrapper for medical (seeds vary the Train/Cal split since the Train/Test split is fixed).
+   - (c) Add baselines (plain split CP, `OnlineConformalPredictor` without LR weighting) — currently only Weighted CAFHT is run on this cohort.
+   - (d) Consider LR-only (γ=0) ablation once (b) exists.
 9. **Theoretical proofs** — guarantee "has yet to be finalized" per technical note.
 
 ---
