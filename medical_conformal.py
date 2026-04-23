@@ -867,7 +867,7 @@ def run_medical_experiment(data, cal_frac=0.5, alpha=0.1, seed=42,
                 covered = int(lo <= y_true <= hi)
                 covered_t.append(covered)
                 width_t.append(hi - lo)
-                if i == 0:
+                if i == 1:
                     first_true.append(y_true)
                     first_lower.append(lo)
                     first_upper.append(hi)
