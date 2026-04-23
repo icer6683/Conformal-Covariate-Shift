@@ -53,15 +53,26 @@ This keeps NaCl sparse while ensuring physiologic signals remain usable.
 
 # TrainCal / Test split
 
-Patients are divided using **Norepinephrine exposure**.
+Patients are divided using **Norepinephrine exposure during the first 12 hourly time stamps (t0..t11)**.
 
 **TrainCal set**
-- patients with **no Norepinephrine usage** at any of the 24 hourly time stamps.
+- patients with **no Norepinephrine usage** in any of the **first 12 hourly time stamps**.
+- Note: a TrainCal patient *may* have nonzero Norepinephrine later in the trajectory (t12..t23); only the first 12 hours are inspected.
 
 **Test set**
-- patients with **any nonzero Norepinephrine usage**.
+- patients with **any nonzero Norepinephrine usage** in the **first 12 hourly time stamps**.
 
 Norepinephrine itself is **not used as a predictive covariate**, but only to induce a distribution shift.
+
+**Resulting cohort sizes** (verified on the current `.pkl`):
+
+| Set      | n patients |
+|----------|-----------:|
+| TrainCal |      9264  |
+| Test     |      5827  |
+| Total    |     15091  |
+
+Compared with the previous rule (any Norepinephrine anywhere in t0..t23 → Test), 664 patients who receive Norepinephrine only in hours 12..23 are reclassified from Test to TrainCal. The shift is now grounded on early-ICU vasopressor initiation rather than any-time exposure.
 
 ---
 

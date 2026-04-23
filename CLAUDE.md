@@ -44,7 +44,7 @@ Target coverage guarantee: P(Y^{n+1}_t ∈ Ĉ_t, ∀t ∈ [T]) ≥ 1 − α.
 |---|---|
 | `medical/medical_conformal.py` | Sepsis ICU experiment using `AdaptedCAFHT` with linear covariate model + static covariates |
 | `medical/medical_data.md` | Data dictionary for the sepsis pickle (cohort, imputation, split) |
-| `medical/sepsis_experiment_data_nacl_target.pkl` | Pre-extracted MIMIC-III sepsis pickle (8600 TrainCal + 6491 Test patients) |
+| `medical/sepsis_experiment_data_nacl_target.pkl` | Pre-extracted MIMIC-III sepsis pickle (9264 TrainCal + 5827 Test patients; split by Norepinephrine exposure in first 12 hours) |
 
 ### Data and results
 | Path | Role |
@@ -286,7 +286,7 @@ Audit performed 2026-04-23. All claims below are source-verified.
 |---|---|---|
 | `medical/medical_conformal.py` | Full experiment script: data loading, model, gamma selection, LR weighting, ACI loop, plotting, CLI | Implemented |
 | `medical/medical_data.md` | Data dictionary: cohort definition, imputation rules, patient dict structure, example usage | Implemented |
-| `medical/sepsis_experiment_data_nacl_target.pkl` | Pre-extracted MIMIC-III sepsis data (8600 TrainCal + 6491 Test patients, 24 hourly steps each) | Present |
+| `medical/sepsis_experiment_data_nacl_target.pkl` | Pre-extracted MIMIC-III sepsis data (9264 TrainCal + 5827 Test patients, 24 hourly steps each; split by Norepinephrine use in first 12 hours) | Present |
 | `results/medical/` | No medical output files exist yet | Not run |
 
 No notebooks, no multi-seed wrapper, no baseline script, no covariate-shift diagnostic plot for the medical domain.
@@ -336,7 +336,7 @@ No notebooks, no multi-seed wrapper, no baseline script, no covariate-shift diag
 
 ### 3. Data-generating process (real data)
 
-**Source**: MIMIC-III sepsis cohort, pre-extracted and stored in `sepsis_experiment_data_nacl_target.pkl` (n_traincal=8600, n_test=6491, verified by loading the pickle).
+**Source**: MIMIC-III sepsis cohort, pre-extracted and stored in `sepsis_experiment_data_nacl_target.pkl` (n_traincal=9264, n_test=5827, verified by loading the pickle on 2026-04-23 after the split-rule update).
 
 **Cohort criteria** (from `medical_data.md`):
 - Sepsis diagnosis (ICD codes, upstream pipeline)
@@ -351,12 +351,13 @@ No notebooks, no multi-seed wrapper, no baseline script, no covariate-shift diag
 | Dynamic covariate X₂ | Respiratory Rate | `"Respiratory Rate"` | Same imputation rule |
 | Dynamic covariate X₃ | O2 saturation pulseoxymetry | `"O2 saturation pulseoxymetry"` | Same imputation rule |
 | Static covariate S | Age, gender, ethnicity | `STATIC_VARS` | Age numeric; gender binary; ethnicity 5-group one-hot (WHITE reference) |
-| Shift variable (split only) | Norepinephrine | `"Norepinephrine"` | Not used as covariate; defines TrainCal vs. Test |
+| Shift variable (split only) | Norepinephrine | `"Norepinephrine"` | Not used as covariate; defines TrainCal vs. Test by exposure during the first 12 hours (t0..t11) |
 
 **TrainCal / Test split** (`medical_data.md`):
-- TrainCal: patients with no Norepinephrine at any of 24 hours → n=8600
-- Test: patients with any nonzero Norepinephrine → n=6491
-- Covariate shift: Norepinephrine exposure correlates with different fluid management and physiologic states
+- TrainCal: patients with **no Norepinephrine in the first 12 hours** (t0..t11) → n=9264. May still have late Norepinephrine (t12..t23).
+- Test: patients with **any nonzero Norepinephrine in the first 12 hours** (t0..t11) → n=5827.
+- Covariate shift: early-ICU vasopressor initiation correlates with different fluid management and physiologic states.
+- The rule was tightened from any-time exposure to first-12-hour exposure, which moved 664 patients with late-only Norepinephrine from Test to TrainCal.
 
 **Time horizon**: T = 23 (predict hours 1–23 from prefix; each patient has exactly 24 hourly observations).
 
@@ -372,7 +373,7 @@ No notebooks, no multi-seed wrapper, no baseline script, no covariate-shift diag
 - **Script**: `medical/medical_conformal.py`; entry point `main()` / `run_medical_experiment()`
 - **Methods compared**: AdaptedCAFHT with shift (`--with_shift`) vs. without shift (uniform weights)
 - **No baseline**: `OnlineConformalPredictor` is not wired up for this domain
-- **Sample sizes**: n_traincal=8600, n_test=6491 (full); `--n_traincal` / `--n_test` flags allow subsampling
+- **Sample sizes**: n_traincal=9264, n_test=5827 (full); `--n_traincal` / `--n_test` flags allow subsampling
 - **Cal/train split**: cal_frac=0.5 → ~4300 train / ~4300 cal
 - **Time horizon**: T=23 steps
 - **Alpha**: 0.1 (default)
@@ -402,7 +403,7 @@ No notebooks, no multi-seed wrapper, no baseline script, no covariate-shift diag
 
 | Component | Status | Notes |
 |---|---|---|
-| Data pickle (`medical/sepsis_experiment_data_nacl_target.pkl`) | **Completed** | Present; 8600+6491 patients; verified loadable |
+| Data pickle (`medical/sepsis_experiment_data_nacl_target.pkl`) | **Completed** | Present; 9264 TrainCal + 5827 Test patients (split by Norep in first 12 h); verified loadable |
 | Data dictionary (`medical/medical_data.md`) | **Completed** | Cohort, imputation, split, dict structure, usage examples |
 | Experiment script (`medical/medical_conformal.py`) | **Completed** | Full CLI, LR weighting, ACI, model, featurizer, gamma selection, plot |
 | Run results (any output JSON/PDF) | **Not implemented** | No files in `results/`; experiment has not been executed |

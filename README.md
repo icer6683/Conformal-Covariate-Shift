@@ -30,7 +30,7 @@ This codebase accompanies a new paper proposing **AdaptedCAFHT** (`core/algorith
 **Evaluation structure**:
 - **Synthetic AR(1) setting** — controlled baseline experiments that isolate the effect of covariate shift; `OnlineConformalPredictor` serves as the no-weighting baseline.
 - **Real-world finance application** — S&P 500 daily returns with one GICS sector held out as the test set (sector = natural covariate shift); validates the method on real data.
-- **Real-world medical application** — MIMIC-III sepsis ICU data; NaCl dosage prediction with Norepinephrine exposure defining the covariate shift.
+- **Real-world medical application** — MIMIC-III sepsis ICU data; NaCl dosage prediction with **early (first-12-hour) Norepinephrine exposure** defining the covariate shift.
 
 **Key comparison**: AdaptedCAFHT (with density-ratio weighting) vs. `OnlineConformalPredictor` (no covariate correction), under both no-shift and shift conditions.
 
@@ -281,8 +281,8 @@ Runs `AdaptedCAFHT` on the MIMIC-III sepsis ICU dataset.
 
 #### Experiment setup
 
-1. **Data**: Pre-extracted pickle (`medical/sepsis_experiment_data_nacl_target.pkl`); 8600 TrainCal + 6491 Test patients, 24 hourly steps each.
-2. **Split**: TrainCal = patients with no Norepinephrine exposure; Test = patients with any Norepinephrine. Covariate shift is driven by differing fluid management under vasopressor therapy.
+1. **Data**: Pre-extracted pickle (`medical/sepsis_experiment_data_nacl_target.pkl`); **9264 TrainCal + 5827 Test** patients, 24 hourly steps each.
+2. **Split**: TrainCal = patients with **no Norepinephrine exposure in the first 12 hours**; Test = patients with **any Norepinephrine in the first 12 hours**. Covariate shift is driven by differing fluid management under early vasopressor therapy.
 3. **Model**: `LinearCovariateModel` — cross-sectional OLS of `NaCl_t` on dynamic vitals (HR, RR, O2Sat) and static demographics (Age, gender, ethnicity).
 4. **Featurizer**: `_richer_featurize_prefixes` — 5 stats × 4 dynamic variables + 6 static features (26 total); standardised per time step.
 5. **Gamma selection**: every 5 steps from `gamma_grid = [1e-6, 5e-6, ..., 1e-2]` (finer than finance/synthetic).
