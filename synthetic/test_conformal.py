@@ -45,6 +45,7 @@ Algorithm predictor examples:
 =============================================================================
 """
 
+import types
 import numpy as np
 import matplotlib
 matplotlib.use("Agg")
@@ -68,8 +69,47 @@ sys.path.insert(0, str(_Path(__file__).resolve().parent.parent))
 from core.ts_generator import TimeSeriesGenerator
 from core.adaptive_conformal import OnlineConformalPredictor
 from core.algorithm import AdaptedCAFHT
+
 # Candidate ACI stepsizes for gamma selection
 GAMMA_GRID = [0.001, 0.005, 0.01, 0.05, 0.1]
+
+# Rolling-window Y featurizer used for all synthetic LR experiments.
+# Features: Y_mean, Y_std, Y_ar1 over the last `w` observed values.
+# These three statistics are theoretically motivated:
+#   - Y_mean captures the level shift from β·X (static Poisson shift)
+#   - Y_std and Y_ar1 capture variance/persistence changes from dynamic X shift
+_SYNTH_Y_WINDOW = 5
+
+def _make_synth_featurizer(w=_SYNTH_Y_WINDOW):
+    def _featurize_prefixes(self, Y_prefixes, X_prefixes=None):
+        Y = Y_prefixes[..., 0]          # (n, L)
+        n, L = Y.shape
+        ww = min(w, L)
+        Y_w = Y[:, -ww:]                # (n, ww)
+
+        y_mean = Y_w.mean(axis=1, keepdims=True)              # (n, 1)
+        y_std  = (Y_w.std(axis=1, keepdims=True) + 1e-8)      # (n, 1)
+
+        # Lag-1 and lag-2 autocorrelations via Yule-Walker
+        yc  = Y_w - y_mean                                     # centered (n, ww)
+        var = (yc ** 2).mean(axis=1, keepdims=True) + 1e-8
+
+        if ww >= 3:
+            r1    = (yc[:, :-1] * yc[:, 1:]).mean(axis=1, keepdims=True) / var
+            y_ar1 = np.clip(r1, -2.0, 2.0)
+        else:
+            r1    = np.zeros((n, 1))
+            y_ar1 = r1
+
+        if ww >= 4:
+            r2    = (yc[:, :-2] * yc[:, 2:]).mean(axis=1, keepdims=True) / var
+            denom = 1.0 - r1 ** 2 + 1e-8
+            y_ar2 = np.clip((r2 - r1 ** 2) / denom, -2.0, 2.0)
+        else:
+            y_ar2 = np.zeros((n, 1))
+
+        return np.concatenate([y_mean, y_std, y_ar1, y_ar2], axis=1)  # (n, 4)
+    return _featurize_prefixes
 
 def run_time_based_coverage_experiment(
     generator: TimeSeriesGenerator,
@@ -183,6 +223,12 @@ def run_time_based_coverage_experiment(
     # Reset adaptation for algorithm predictor at the start of testing
     if predictor_type == "algorithm" and hasattr(predictor, 'reset_adaptation'):
         predictor.reset_adaptation()
+
+    # Inject richer Y featurizer (mean, std, ar1 over rolling window)
+    if predictor_type == "algorithm":
+        predictor._featurize_prefixes = types.MethodType(
+            _make_synth_featurizer(_SYNTH_Y_WINDOW), predictor
+        )
 
     # -----------------------
     # Generate test data

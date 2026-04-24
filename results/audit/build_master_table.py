@@ -142,6 +142,9 @@ def extract_finance_experiment(path: Path) -> dict:
     # detect LR-only ablation (γ=0) via gamma_grid
     gg = cfg.get("gamma_grid") or []
     is_lr_only = (len(gg) == 1 and float(gg[0]) == 0.0 and with_shift)
+    # detect expanded gamma grid that includes 0.03
+    grid_values = [float(g) for g in gg]
+    is_g10_grid = (0.1 in grid_values) and not is_lr_only
 
     # method label
     if mixed:
@@ -149,9 +152,9 @@ def extract_finance_experiment(path: Path) -> dict:
     elif is_lr_only:
         method = "AdaptedCAFHT (LR only, γ=0)"
     elif with_shift:
-        method = "Weighted CAFHT (LR + ACI)"
+        method = "Weighted CAFHT (LR + ACI)" + (" [grid+0.1]" if is_g10_grid else "")
     else:
-        method = "AdaptedCAFHT (uniform weights + ACI)"
+        method = "AdaptedCAFHT (uniform weights + ACI)" + (" [grid+0.1]" if is_g10_grid else "")
 
     # refine shift_condition to reflect LRonly
     if is_lr_only:
@@ -344,10 +347,17 @@ def main():
     tech_lronly = [r for r in rows if r["domain"] == "finance"
                    and r["experiment_id"].startswith("tech_LRonly_")
                    and "DUP" not in r["experiment_id"]]
+    # util shift / noshift split by grid variant (default vs g03)
     util_shift = [r for r in rows if r["domain"] == "finance"
-                  and r["experiment_id"].startswith("util_shift_")]
+                  and r["experiment_id"].startswith("util_shift_")
+                  and "_g10_" not in r["experiment_id"]]
     util_noshift = [r for r in rows if r["domain"] == "finance"
-                    and r["experiment_id"].startswith("util_noshift_")]
+                    and r["experiment_id"].startswith("util_noshift_")
+                    and "_g10_" not in r["experiment_id"]]
+    util_shift_g10 = [r for r in rows if r["domain"] == "finance"
+                      and r["experiment_id"].startswith("util_shift_g10_")]
+    util_noshift_g10 = [r for r in rows if r["domain"] == "finance"
+                        and r["experiment_id"].startswith("util_noshift_g10_")]
     util_lronly = [r for r in rows if r["domain"] == "finance"
                    and r["experiment_id"].startswith("util_LRonly_")]
     hc_shift = [r for r in rows if r["domain"] == "finance"
@@ -365,13 +375,14 @@ def main():
         s = var ** 0.5
         return (n, m, s, min(xs), max(xs))
 
+    # Primary agg rows: g10 grid is canonical for utilities
     agg_rows = []
     for label, rs in [("tech_shift (Weighted CAFHT: LR + ACI)", tech_shift),
                       ("tech_noshift (AdaptedCAFHT: uniform weights + ACI)", tech_noshift),
                       ("tech_LRonly (AdaptedCAFHT: LR only, γ=0)", tech_lronly),
-                      ("util_shift (Weighted CAFHT: LR + ACI)", util_shift),
-                      ("util_noshift (AdaptedCAFHT: uniform weights + ACI)", util_noshift),
-                      ("util_LRonly (AdaptedCAFHT: LR only, γ=0)", util_lronly)]:
+                      ("util_shift (Weighted CAFHT: LR + ACI, γ∈{0.001,0.005,0.01,0.05,0.1})", util_shift_g10),
+                      ("util_noshift (AdaptedCAFHT: uniform + ACI, γ∈{0.001,0.005,0.01,0.05,0.1})", util_noshift_g10),
+                      ("util_LRonly (LR only, γ=0)", util_lronly)]:
         covs = [r["overall_coverage"] for r in rs]
         widths = [r["mean_width"] for r in rs]
         nc, mc, sc, minc, maxc = stats(covs)
@@ -418,8 +429,63 @@ def main():
             })
         return out
 
+    # Reference-only: default gamma grid for utilities
+    agg_rows_ref = []
+    for label, rs in [("util_shift [earlier grid {0.001,0.005,0.01,0.05}]", util_shift),
+                      ("util_noshift [earlier grid {0.001,0.005,0.01,0.05}]", util_noshift)]:
+        covs = [r["overall_coverage"] for r in rs]
+        widths = [r["mean_width"] for r in rs]
+        nc, mc, sc, minc, maxc = stats(covs)
+        nw, mw, sw, minw, maxw = stats(widths)
+        agg_rows_ref.append({
+            "condition": label,
+            "n_windows": nc,
+            "coverage_mean": mc,
+            "coverage_std_across_windows": sc,
+            "coverage_min": minc,
+            "coverage_max": maxc,
+            "width_mean": mw,
+            "width_std_across_windows": sw,
+            "width_min": minw,
+            "width_max": maxw,
+        })
+
     per_window_rows = build_per_window(tech_shift, tech_noshift, tech_lronly, "tech")
-    util_window_rows = build_per_window(util_shift, util_noshift, util_lronly, "util")
+    # Primary utilities per-window uses g10 grid; default grid kept for reference
+    util_window_rows = build_per_window(util_shift_g10, util_noshift_g10, util_lronly, "util")
+    util_window_rows_def = build_per_window(util_shift, util_noshift, util_lronly, "util")
+
+    # util grid comparison: default vs grid+0.1
+    util_grid_rows = []
+    by_date = {}
+    for r in util_shift + util_shift_g10 + util_noshift + util_noshift_g10:
+        tag = r["experiment_id"]
+        parts = tag.split("_")
+        window = "_".join(parts[-2:]) if len(parts) >= 4 else tag
+        if tag.startswith("util_shift_g10_"):
+            cond = "shift_g10"
+        elif tag.startswith("util_shift_"):
+            cond = "shift_def"
+        elif tag.startswith("util_noshift_g10_"):
+            cond = "noshift_g10"
+        elif tag.startswith("util_noshift_"):
+            cond = "noshift_def"
+        else:
+            cond = "?"
+        by_date.setdefault(window, {})[cond] = r
+    for window in sorted(by_date.keys()):
+        d = by_date[window]
+        util_grid_rows.append({
+            "window": window,
+            "shift_def_cov": d.get("shift_def", {}).get("overall_coverage"),
+            "shift_def_w": d.get("shift_def", {}).get("mean_width"),
+            "shift_g10_cov": d.get("shift_g10", {}).get("overall_coverage"),
+            "shift_g10_w": d.get("shift_g10", {}).get("mean_width"),
+            "noshift_def_cov": d.get("noshift_def", {}).get("overall_coverage"),
+            "noshift_def_w": d.get("noshift_def", {}).get("mean_width"),
+            "noshift_g10_cov": d.get("noshift_g10", {}).get("overall_coverage"),
+            "noshift_g10_w": d.get("noshift_g10", {}).get("mean_width"),
+        })
 
     # Aggregate CSV
     agg_csv = OUT_DIR / "finance_tech_aggregate.csv"
@@ -499,17 +565,19 @@ def main():
     def subf(a, b):
         return fv((a - b)) if (a is not None and b is not None) else "—"
 
-    lines = ["# Finance Technology — aggregate over windows (tech + healthcare)\n",
-             "Duplicates (` 2.json`) excluded.\n",
-             "## Tech summary (13 windows)\n",
+    lines = ["# Finance Technology/Utilities — aggregate over windows\n",
+             "Duplicates (` 2.json`) excluded. **Utilities primary rows use the expanded γ-grid {0.001, 0.005, 0.01, 0.05, 0.1}** (g10); earlier default-grid rows are in the Reference section below.\n",
+             "## Summary across windows (13 windows each)\n",
              "| condition | n_windows | coverage_mean | coverage_std | coverage_min | coverage_max | width_mean | width_std | width_min | width_max |",
              "|---|---|---|---|---|---|---|---|---|---|"]
     for r in agg_rows:
         lines.append(f"| {r['condition']} | {r['n_windows']} | {f(r['coverage_mean'])} | {f(r['coverage_std_across_windows'])} | {f(r['coverage_min'])} | {f(r['coverage_max'])} | {f(r['width_mean'])} | {f(r['width_std_across_windows'])} | {f(r['width_min'])} | {f(r['width_max'])} |")
     lines.append("")
 
-    def pw_md_block(title, rows):
+    def pw_md_block(title, rows, note=""):
         lines.append(f"## {title}\n")
+        if note:
+            lines.append(note + "\n")
         lines.append("Columns: shift = Weighted CAFHT (LR + ACI); noshift = AdaptedCAFHT (uniform + ACI); LRonly = AdaptedCAFHT (LR + γ=0).\n")
         lines.append("| window | shift_cov | shift_width | noshift_cov | noshift_width | LRonly_cov | LRonly_width | Δcov (shift−noshift) | Δw (shift−noshift) | Δcov (LRonly−noshift) | Δw (LRonly−noshift) | Δcov (shift−LRonly) | Δw (shift−LRonly) |")
         lines.append("|---|---|---|---|---|---|---|---|---|---|---|---|---|")
@@ -521,7 +589,41 @@ def main():
         lines.append("")
 
     pw_md_block("Tech per-window, three conditions", per_window_rows)
-    pw_md_block("Utilities per-window, three conditions", util_window_rows)
+    pw_md_block(
+        "Utilities per-window, three conditions (γ∈{0.001,0.005,0.01,0.05,0.1})",
+        util_window_rows,
+        note="Primary utilities table. γ-grid includes 0.1; selector can pick a larger step to correct the overshoot seen with the default grid.",
+    )
+
+    # Reference section: earlier default-grid utilities
+    lines.append("---\n")
+    lines.append("## Reference: earlier utilities results (default γ-grid {0.001,0.005,0.01,0.05})\n")
+    lines.append("Retained for comparison only. The primary utilities rows above supersede these.\n")
+    lines.append("| condition | n_windows | coverage_mean | coverage_std | coverage_min | coverage_max | width_mean | width_std | width_min | width_max |")
+    lines.append("|---|---|---|---|---|---|---|---|---|---|")
+    for r in agg_rows_ref:
+        lines.append(f"| {r['condition']} | {r['n_windows']} | {f(r['coverage_mean'])} | {f(r['coverage_std_across_windows'])} | {f(r['coverage_min'])} | {f(r['coverage_max'])} | {f(r['width_mean'])} | {f(r['width_std_across_windows'])} | {f(r['width_min'])} | {f(r['width_max'])} |")
+    lines.append("")
+
+    pw_md_block(
+        "Utilities per-window — earlier default grid (reference only)",
+        util_window_rows_def,
+        note="Default γ-grid {0.001, 0.005, 0.01, 0.05}. Coverage overshoots 90% because selector cannot pick a step large enough to correct quickly.",
+    )
+
+    # Grid-comparison block for utilities
+    if util_grid_rows and any(r["shift_g10_cov"] is not None or r["noshift_g10_cov"] is not None for r in util_grid_rows):
+        lines.append("## Utilities: default grid vs grid+0.1 per window (side-by-side)\n")
+        lines.append("Default grid = {0.001, 0.005, 0.01, 0.05}; g10 grid = {0.001, 0.005, 0.01, 0.05, 0.1}. Both shift and noshift re-run; LRonly unchanged.\n")
+        lines.append("| window | shift_def_cov | shift_g10_cov | Δcov (g10−def) shift | noshift_def_cov | noshift_g10_cov | Δcov (g10−def) noshift | shift_def_w | shift_g10_w | Δw shift | noshift_def_w | noshift_g10_w | Δw noshift |")
+        lines.append("|---|---|---|---|---|---|---|---|---|---|---|---|---|")
+        for r in util_grid_rows:
+            sd, sg = r["shift_def_cov"], r["shift_g10_cov"]
+            nd, ng = r["noshift_def_cov"], r["noshift_g10_cov"]
+            sdw, sgw = r["shift_def_w"], r["shift_g10_w"]
+            ndw, ngw = r["noshift_def_w"], r["noshift_g10_w"]
+            lines.append(f"| {r['window']} | {fv(sd)} | {fv(sg)} | {subf(sg, sd)} | {fv(nd)} | {fv(ng)} | {subf(ng, nd)} | {fv(sdw)} | {fv(sgw)} | {subf(sgw, sdw)} | {fv(ndw)} | {fv(ngw)} | {subf(ngw, ndw)} |")
+        lines.append("")
 
     # Healthcare block
     lines.append("## Healthcare (2 windows — preliminary)\n")

@@ -596,7 +596,7 @@ def _select_gamma(Y_train, X_train, S_train, cov_names, static_names,
 
 def run_medical_experiment(data, cal_frac=0.5, alpha=0.1, seed=42,
                            gamma_grid=None, with_shift=False,
-                           n_traincal=None, n_test=None):
+                           n_traincal=None, n_test=None, verbose=True):
     """
     Run AdaptedCAFHT conformal prediction on sepsis ICU data.
 
@@ -671,21 +671,22 @@ def run_medical_experiment(data, cal_frac=0.5, alpha=0.1, seed=42,
     cov_names = COVARIATE_VARS
     static_names = ["Age", "gender_M"] + [f"eth_{e}" for e in ETHNICITY_DUMMIES]
 
-    print(f"\n{'='*62}")
-    print(f"  Medical Conformal Experiment  (AdaptedCAFHT)")
-    print(f"{'='*62}")
-    print(f"  TrainCal total  : {n_traincal} patients (no Norepinephrine)")
-    print(f"    Train         : {n_train}")
-    print(f"    Cal           : {n_cal}")
-    print(f"  Test            : {n_test} patients (received Norepinephrine)")
-    print(f"  Time steps      : {L} hours  [0 .. {T}]")
-    print(f"  Target (Y)      : {TARGET_VAR}")
-    print(f"  Covariates (X)  : {cov_names}")
-    print(f"  Static (S)      : {static_names}")
-    print(f"  Alpha           : {alpha}  (target = {1-alpha:.0%})")
-    print(f"  Gamma grid      : {gamma_grid}")
-    print(f"  With shift      : {with_shift}")
-    print()
+    if verbose:
+        print(f"\n{'='*62}")
+        print(f"  Medical Conformal Experiment  (AdaptedCAFHT)")
+        print(f"{'='*62}")
+        print(f"  TrainCal total  : {n_traincal} patients (no Norepinephrine)")
+        print(f"    Train         : {n_train}")
+        print(f"    Cal           : {n_cal}")
+        print(f"  Test            : {n_test} patients (received Norepinephrine)")
+        print(f"  Time steps      : {L} hours  [0 .. {T}]")
+        print(f"  Target (Y)      : {TARGET_VAR}")
+        print(f"  Covariates (X)  : {cov_names}")
+        print(f"  Static (S)      : {static_names}")
+        print(f"  Alpha           : {alpha}  (target = {1-alpha:.0%})")
+        print(f"  Gamma grid      : {gamma_grid}")
+        print(f"  With shift      : {with_shift}")
+        print()
 
     # -- Set up predictor --------------------------------------------------
     predictor    = AdaptedCAFHT(alpha=alpha)
@@ -697,9 +698,10 @@ def run_medical_experiment(data, cal_frac=0.5, alpha=0.1, seed=42,
     )
     n_dyn_feat = 5 * (1 + len(COVARIATE_VARS))
     n_total_feat = n_dyn_feat + N_STATIC
-    print(f"  Featurizer      : richer ({n_dyn_feat} dynamic + {N_STATIC} static"
-          f" = {n_total_feat} features)")
-    print()
+    if verbose:
+        print(f"  Featurizer      : richer ({n_dyn_feat} dynamic + {N_STATIC} static"
+              f" = {n_total_feat} features)")
+        print()
 
     # -- ACI state ---------------------------------------------------------
     alpha_t   = np.full(n_test, alpha, dtype=float)
@@ -718,7 +720,7 @@ def run_medical_experiment(data, cal_frac=0.5, alpha=0.1, seed=42,
 
         # -- Fit linear model on training prefix --------------------------
         linear_model.fit(Y_train[:, :t+2, :], X_train[:, :t+2, :], S_train,
-                         verbose=(t == T - 1))
+                         verbose=(verbose and t == T - 1))
         predictor.noise_std = linear_model.noise_std
 
         # -- Build calibration scores -------------------------------------
@@ -748,8 +750,9 @@ def run_medical_experiment(data, cal_frac=0.5, alpha=0.1, seed=42,
                 f"gamma={g:.3f}->{v:.3f}" for g, v in gamma_scores.items()
                 if np.isfinite(v)
             )
-            print(f"  [gamma sel t={t:3d}]  best gamma = {gamma_opt}"
-                  f"   ({scores_str})")
+            if verbose:
+                print(f"  [gamma sel t={t:3d}]  best gamma = {gamma_opt}"
+                      f"   ({scores_str})")
 
         gamma_opt_history.append(float(gamma_opt))
 
@@ -806,9 +809,8 @@ def run_medical_experiment(data, cal_frac=0.5, alpha=0.1, seed=42,
                 )
 
                 # Diagnostics (first swap only, at selected steps)
-                if pred_idx is half1 and (t == 1 or t % 10 == 0 or t == T - 1):
+                if verbose and pred_idx is half1 and (t == 1 or t % 10 == 0 or t == T - 1):
                     _print_feature_diagnostic(predictor, cal_feat, t)
-                if pred_idx is half1 and (t == 1 or t % 10 == 0 or t == T - 1):
                     _print_classifier_diagnostic(predictor, cal_feat, t)
 
                 # Tile per-series weights to per-score weights
@@ -827,7 +829,7 @@ def run_medical_experiment(data, cal_frac=0.5, alpha=0.1, seed=42,
                 predictor._q       = None
 
                 # Weight summary
-                if t == 1 or t % 10 == 0 or t == T - 1:
+                if verbose and (t == 1 or t % 10 == 0 or t == T - 1):
                     label = "half1-ctx" if pred_idx is half1 else "half2-ctx"
                     _print_weight_diagnostic(per_series_w, t, label=label)
 
@@ -884,16 +886,18 @@ def run_medical_experiment(data, cal_frac=0.5, alpha=0.1, seed=42,
         width_by_time.append(float(np.mean(width_t)))
         all_covered.extend(covered_t)
 
-        if (t + 1) % 5 == 0 or t == T - 1:
+        if verbose and ((t + 1) % 5 == 0 or t == T - 1):
             print(f"  [t={t+1:3d}/{T}]  coverage={np.mean(covered_t):.3f}  "
                   f"width={np.mean(width_t):.4f}  gamma={gamma_opt}")
 
     overall_coverage = float(np.mean(all_covered))
     target = 1.0 - alpha
-    print(f"\n  Overall coverage : {overall_coverage:.4f}  "
-          f"(target = {target:.4f},  error = {overall_coverage - target:+.4f})")
-    print(f"  Mean width       : {np.mean(width_by_time):.4f}")
-    print(f"  Final gamma_opt  : {gamma_opt}")
+    if verbose:
+        print(f"\n  Overall coverage : {overall_coverage:.4f}  "
+              f"(target = {target:.4f},  error = {overall_coverage - target:+.4f})")
+        print(f"  Mean width       : {np.mean(width_by_time):.4f}")
+    if verbose:
+        print(f"  Final gamma_opt  : {gamma_opt}")
 
     # Pick patient IDs for the first test patient (for plot title)
     first_test_id = test_ids[0] if test_ids else "unknown"
