@@ -165,8 +165,7 @@ Single-run experiment harness. Generates data via `TimeSeriesGenerator`, runs a 
 
 | `--predictor` | Class used |
 |---|---|
-| `basic` | `BasicConformalPredictor` (AR only, no adaptation) |
-| `adaptive` | `OnlineConformalPredictor` |
+| `adaptive` | `OnlineConformalPredictor` (sliding-window split conformal, no ACI) |
 | `algorithm` | `AdaptedCAFHT` |
 
 #### `run_time_based_coverage_experiment` (main function)

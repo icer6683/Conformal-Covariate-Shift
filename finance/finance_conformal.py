@@ -48,12 +48,13 @@ FULL OPTIONS
 
 FEATURIZER  (used only with --with_shift)
 -----------------------------------------
-  Y features — computed over the most recent Y_WINDOW=30 steps of Y
+  Y features — computed over the most recent Y_WINDOW=10 steps of Y
   (or fewer if t < Y_WINDOW):
     Y_mean, Y_std, Y_ar1
 
-  X features — mean of each covariate over the full prefix:
-    X_mean_k for each covariate k
+  X features — over the full prefix (x_window=0):
+    X_mean_k for each covariate k   (mean over full history)
+    X_std_k  for each covariate k   (std  over full history)
 
   No z-score standardisation. No regularisation override (uses algorithm.py
   default C=1.0).
@@ -340,8 +341,9 @@ def run_finance_experiment(result, test_sector, cal_frac=0.5, alpha=0.1, seed=42
     n_series, L, n_cov = X.shape
     T = L - 1
 
-    feat_names = ["Y_mean(w30)", "Y_std(w30)", "Y_ar1(w30)"] + \
-                 [f"X_mean_{c}" for c in cov_names]
+    feat_names = ["Y_mean(w10)", "Y_std(w10)", "Y_ar1(w10)"] + \
+                 [f"X_mean_{c}" for c in cov_names] + \
+                 [f"X_std_{c}"  for c in cov_names]
 
     rng = np.random.default_rng(seed)
 
@@ -395,7 +397,7 @@ def run_finance_experiment(result, test_sector, cal_frac=0.5, alpha=0.1, seed=42
     print(f"  With shift      : {with_shift}")
     if with_shift:
         print(f"  Y featurizer    : mean/std/ar1 over rolling window={Y_WINDOW} steps")
-        print(f"  X featurizer    : mean over full prefix")
+        print(f"  X featurizer    : mean+std over full prefix")
         print(f"  Feature names   : {feat_names}")
     print()
 
@@ -903,8 +905,8 @@ def main():
                              "Default: 0.15  (~15%% of tickers)")
     parser.add_argument("--x_window",       type=int,   default=X_WINDOW,
                         help=f"Rolling window (days) for X covariate features used in "
-                             f"the shift classifier. Default: {X_WINDOW}. "
-                             f"Set 0 to revert to full-prefix mean (original behaviour).")
+                             f"the shift classifier. Default: {X_WINDOW} (full prefix). "
+                             f"Set >0 to use a rolling window instead.")
     parser.add_argument("--save_plot",       default=None)
     parser.add_argument("--save_json",       default=None)
     # ── Comparison mode: overlay a second (no-shift) JSON result ─────────────

@@ -4,6 +4,15 @@
 FINANCE CONFORMAL PREDICTION  —  OnlineConformalPredictor on S&P 500 data
 =============================================================================
 
+STATUS: LEGACY / UNUSED.
+  Has never been run to produce saved JSON output. The paper baselines are
+  produced by running finance_conformal.py with AdaptedCAFHT ablations
+  (aci_stepsize=0.0 for LR-only; uniform weights for ACI-only) on the same
+  covariate model. This script is retained for reference because it provides
+  an AR(1)-only (no-covariate) baseline, but it is structurally different
+  from the covariate-model AdaptedCAFHT baselines and is not used in the
+  current experimental plan.
+
 Mirrors the structure of finance_conformal.py but replaces AdaptedCAFHT with
 OnlineConformalPredictor (adaptive_conformal.py).
 

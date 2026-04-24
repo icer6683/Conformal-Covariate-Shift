@@ -420,8 +420,8 @@
     "seed": 42,
     "with_shift": false,
     "mixed": false,
-    "Y_window": 30,
-    "x_window": 5,
+    "Y_window": 10,
+    "x_window": 0,
     "cov_names": [
       "OvernightGapReturn",
       "Above52wLowReturn",
@@ -429,13 +429,17 @@
       "DailyRangeReturn_lag1"
     ],
     "feat_names": [
-      "Y_mean(w30)",
-      "Y_std(w30)",
-      "Y_ar1(w30)",
+      "Y_mean(w10)",
+      "Y_std(w10)",
+      "Y_ar1(w10)",
       "X_mean_OvernightGapReturn",
       "X_mean_Above52wLowReturn",
       "X_mean_TurnoverRatio_lag1",
-      "X_mean_DailyRangeReturn_lag1"
+      "X_mean_DailyRangeReturn_lag1",
+      "X_std_OvernightGapReturn",
+      "X_std_Above52wLowReturn",
+      "X_std_TurnoverRatio_lag1",
+      "X_std_DailyRangeReturn_lag1"
     ]
   }
 }

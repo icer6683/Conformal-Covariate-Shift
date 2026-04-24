@@ -119,6 +119,7 @@ class MultiSeedExperiment:
             n_train=config['n_train'],
             n_cal=config['n_cal'],
             aci_stepsize=config['aci_stepsize'],
+            use_lr=config['use_lr'],
         )
         
         return results_by_time
@@ -459,7 +460,7 @@ def main():
                         help='Directory to save results')
     
     # Predictor and experiment configuration
-    parser.add_argument('--predictor', choices=['basic', 'adaptive', 'algorithm'], 
+    parser.add_argument('--predictor', choices=['adaptive', 'algorithm'],
                         default='algorithm',
                         help='Predictor type')
     parser.add_argument('--n_series', type=int, default=None,
@@ -486,9 +487,12 @@ def main():
     parser.add_argument('--trend_coef', type=float, default=0.0)
     
     # Covariate configuration
-    parser.add_argument('--covariate_mode', choices=['static', 'dynamic'], 
+    parser.add_argument('--covariate_mode', choices=['static', 'dynamic'],
                         default='static')
     parser.add_argument('--with_shift', action='store_true')
+    parser.add_argument('--use_lr', action='store_true',
+                        help='Use LR weighting in the algorithm predictor. '
+                             'When False, uniform weights are used (ACI only).')
     
     # Static covariate parameters
     parser.add_argument('--covar_rate', type=float, default=1.0)
@@ -507,15 +511,7 @@ def main():
     args = parser.parse_args()
     
     # Set predictor-specific defaults
-    if args.predictor == "basic":
-        defaults = {
-            'n_series': 600,
-            'n_train': 1200,
-            'n_cal': 200,
-            'T': 200,
-            'covar_rate_shift': 3.0
-        }
-    elif args.predictor == "adaptive":
+    if args.predictor == "adaptive":
         defaults = {
             'n_series': 500,
             'n_train': 1000,
@@ -553,6 +549,7 @@ def main():
         'trend_coef': args.trend_coef,
         'covariate_mode': args.covariate_mode,
         'with_shift': args.with_shift,
+        'use_lr': args.use_lr,
         'covar_rate': args.covar_rate,
         'covar_rate_shift': args.covar_rate_shift,
         'x_rate': args.x_rate,
@@ -595,14 +592,29 @@ def main():
     # Create timestamp for filenames
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     pred_str = config['predictor']
-    shift_str = 'shift' if config['with_shift'] else 'noshift'
+
+    # Data condition: what distribution the test set was drawn from
+    if not config['with_shift']:
+        data_str = 'noshift'
+    elif config['covariate_mode'] == 'dynamic':
+        data_str = 'dynamicshift'
+    else:
+        data_str = 'staticshift'
+
+    # Algorithm version: which components are active
+    if not config['use_lr'] and config['aci_stepsize'] != 0.0:
+        algo_str = 'weightone'       # ACI only, uniform weights
+    elif config['use_lr'] and config['aci_stepsize'] == 0.0:
+        algo_str = 'LRonly'          # LR weights, no ACI
+    else:
+        algo_str = 'LRandACI'        # full method (also covers use_lr=False + aci=0, degenerate)
 
     # Save results
-    results_file = json_dir / f"results_{pred_str}_{shift_str}_{timestamp}.json"
+    results_file = json_dir / f"results_{pred_str}_{data_str}_{algo_str}_{timestamp}.json"
     experiment.save_results(aggregated, str(results_file))
 
     # Create and save plots
-    plot_file = pdf_dir / f"plots_{pred_str}_{shift_str}_{timestamp}.png"
+    plot_file = pdf_dir / f"plots_{pred_str}_{data_str}_{algo_str}_{timestamp}.png"
     experiment.plot_aggregated_results(aggregated, save_path=str(plot_file))
 
     print(f"\nJSON saved to {json_dir}/")

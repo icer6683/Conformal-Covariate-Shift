@@ -21,7 +21,7 @@ Target coverage guarantee: P(Y^{n+1}_t ∈ Ĉ_t, ∀t ∈ [T]) ≥ 1 − α.
 | File | Role |
 |---|---|
 | `core/algorithm.py` | `AdaptedCAFHT` class — the full proposed method |
-| `core/adaptive_conformal.py` | `OnlineConformalPredictor` and `BasicConformalPredictor` — baselines |
+| `core/adaptive_conformal.py` | `OnlineConformalPredictor` — sliding-window split-conformal baseline (no ACI, no LR weighting). Legacy; ablations of Weighted CAFHT are now done via `AdaptedCAFHT` with weights=1 (LR-only off) or γ=0 (ACI off) rather than through this class. |
 | `core/ts_generator.py` | `TimeSeriesGenerator` — synthetic DGPs + shift |
 
 ### Synthetic experiments (`synthetic/`)
@@ -35,7 +35,7 @@ Target coverage guarantee: P(Y^{n+1}_t ∈ Ĉ_t, ∀t ∈ [T]) ≥ 1 − α.
 |---|---|
 | `finance/finance_data.py` | yfinance S&P 500 loader; save/load `.npz`+`.json`; sector/industry filters |
 | `finance/finance_conformal.py` | S&P 500 experiment using `AdaptedCAFHT` with linear covariate model |
-| `finance/finance_adaptive.py` | S&P 500 experiment using `OnlineConformalPredictor` (AR(1) only, no covariates) |
+| `finance/finance_adaptive.py` | **Legacy / unused.** S&P 500 experiment using `OnlineConformalPredictor` (AR(1) only, no covariates). Never run and saved. Retained for reference only; the paper baseline is now `AdaptedCAFHT` with γ=0 or uniform weights on the same covariate model. |
 | `finance/tune_featurizer.py` | Grid-search over featurizer variants for the S&P 500 LR classifier |
 | `finance/plot_covariate_shift.py` | Standalone covariate distribution visualization |
 
@@ -131,11 +131,11 @@ Every 10 time steps, 3-way split of training data:
 
 | Name | Class | Key properties |
 |---|---|---|
-| Split conformal (no ACI) | `BasicConformalPredictor` | AR(1), fixed empirical quantile, no adaptation |
-| Adaptive split conformal | `OnlineConformalPredictor` | AR(1), ACI α_t update, optional online score update (append test residuals) |
-| Weighted CAFHT without ACI | Not separately implemented | Requires γ=0 with LR weights; no saved results |
+| Sliding-window split conformal | `OnlineConformalPredictor` | AR(1), fixed α, empirical quantile recomputed each step over a sliding window of residuals. **No ACI α_t update.** Used in saved `results_adaptive_*20260414*.json`. |
+| Weighted CAFHT without ACI (LR only) | `AdaptedCAFHT` with `aci_stepsize=0.0` | LR-weighted quantile, α held fixed. Ablation — not yet run. |
+| Weighted CAFHT without LR (ACI only) | `AdaptedCAFHT` with uniform weights on shifted test data | Per-series ACI α_t update with uniform calibration weights. Ablation — not yet run; the `with_shift=False` switch currently toggles *both* LR off *and* generates unshifted data, so a dedicated code path may be required. |
 
-`finance_adaptive.py` runs `OnlineConformalPredictor` on S&P 500 using AR(1) only (no covariate model), as a weaker finance-specific baseline.
+Paper ablations are performed through `AdaptedCAFHT` parameter tweaks (flip `aci_stepsize=0.0` for LR-only, uniform weights for ACI-only), not through a separate baseline class. `OnlineConformalPredictor` is retained as a structurally different comparator but is not the primary baseline.
 
 ---
 

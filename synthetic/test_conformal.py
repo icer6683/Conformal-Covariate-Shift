@@ -9,9 +9,8 @@ PURPOSE:
   TIME-BASED coverage visualization. Shows how coverage changes as prediction 
   horizon increases (t=1,2,3,...,T).
   
-  Supports three predictor modes:
-    - basic     : BasicConformalPredictor (AR(1) on Y only, no adaptation)
-    - adaptive  : OnlineConformalPredictor (AR(1) on Y only, adapts over time)
+  Supports two predictor modes:
+    - adaptive  : OnlineConformalPredictor (AR(1) on Y only, sliding-window split conformal)
     - algorithm : AdaptedCAFHT from the paper (weighted conformal with likelihood ratios)
   
   Supports two covariate modes:
@@ -20,15 +19,12 @@ PURPOSE:
 
 WHAT THIS SHOWS:
   Coverage rate and interval width as a function of prediction time step t.
-  Compares how basic vs adaptive vs algorithm methods handle covariate shift scenarios.
+  Compares how adaptive vs algorithm methods handle covariate shift scenarios.
 
 USAGE:
-  # Basic predictor with default settings
-  python test_conformal.py --predictor basic
-
-  # Adaptive predictor with default settings  
+  # Adaptive predictor with default settings
   python test_conformal.py --predictor adaptive
-  
+
   # Algorithm predictor with default settings
   python test_conformal.py --predictor algorithm
 
@@ -37,10 +33,6 @@ USAGE:
       --with_shift --x_rate 0.6 --x_rate_shift 0.9 --beta 1.0
 
 EXAMPLE USAGE:
-
-Basic predictor examples:
-    python test_conformal.py --predictor basic --n_series 1000
-    python test_conformal.py --predictor basic --with_shift --n_series 1000
 
 Adaptive predictor examples:
     python test_conformal.py --predictor adaptive --n_series 300
@@ -81,8 +73,8 @@ GAMMA_GRID = [0.001, 0.005, 0.01, 0.05, 0.1]
 
 def run_time_based_coverage_experiment(
     generator: TimeSeriesGenerator,
-    predictor,  # Can be BasicConformalPredictor, OnlineConformalPredictor, or AlgorithmConformalPredictor
-    predictor_type: str,  # 'basic', 'adaptive', or 'algorithm'
+    predictor,  # Can be OnlineConformalPredictor or AdaptedCAFHT
+    predictor_type: str,  # 'adaptive' or 'algorithm'
     *,
     n_series: int,
     covariate_mode: str,
@@ -109,6 +101,7 @@ def run_time_based_coverage_experiment(
     n_train: int,
     n_cal: int,
     aci_stepsize: float,
+    use_lr: bool = True,
 ):
     """
     Run a time-based coverage experiment: evaluate coverage at each time step t.
@@ -118,7 +111,7 @@ def run_time_based_coverage_experiment(
     """
     mode = covariate_mode.lower()
     assert mode in {"static", "dynamic"}, "covariate_mode must be 'static' or 'dynamic'"
-    assert predictor_type in {"basic", "adaptive", "algorithm"}, "predictor_type must be 'basic', 'adaptive', or 'algorithm'"
+    assert predictor_type in {"adaptive", "algorithm"}, "predictor_type must be 'adaptive' or 'algorithm'"
 
     if with_shift:
         print(f"Running TIME-BASED coverage experiment with TEST covariate shift on {n_series} series...")
@@ -357,7 +350,7 @@ def run_time_based_coverage_experiment(
         # Use increasing amount of data as time progresses
         predictor.fit_ar_model(train_Y[:, :t+2, :])
 
-        if predictor_type == "algorithm" and t >= 1:
+        if predictor_type == "algorithm" and t >= 1 and use_lr:
             # Split test set into two halves. First half uses second half as "shifted" positives, and vice versa.
             mid = n_test // 2
             idx_half1 = np.arange(0, mid)
@@ -424,7 +417,7 @@ def run_time_based_coverage_experiment(
             alpha_series = np.clip(alpha_next, 1e-6, 1.0 - 1e-6)
 
         else:
-            # Baseline behavior (basic/adaptive, or algorithm with no shift or t==0):
+            # Baseline behavior (adaptive, or algorithm with no shift or t==0):
             predictor.calibrate(cal_Y[:, :t+2, :])
 
             for i in range(n_test):
@@ -435,9 +428,7 @@ def run_time_based_coverage_experiment(
                 true_value = series[t+1, 0]
 
                 # Get prediction and interval - handle different predictor types
-                if predictor_type == "basic":
-                    pred, lower, upper = predictor.predict_with_interval(input_series)
-                elif predictor_type == "adaptive":
+                if predictor_type == "adaptive":
                     pred, lower, upper = predictor.predict_with_interval(input_series)
                 else:  # algorithm (no shift or t==0)
                     pred, lower, upper = predictor.predict_with_interval(input_series, alpha_level=alpha_used[i])
@@ -594,7 +585,7 @@ def _select_gamma_simple_aci(train_Y: np.ndarray, base_alpha: float, t_max: int,
 
 
 
-def plot_time_based_results(results_by_time, target_coverage, predictor_type="basic",
+def plot_time_based_results(results_by_time, target_coverage, predictor_type="adaptive",
                             covariate_mode="static", with_shift=False, save_path=None):
     """Plot coverage results by time step."""
     time_steps      = sorted([k for k in results_by_time.keys() if isinstance(k, int)])
@@ -728,8 +719,8 @@ def main():
     parser = argparse.ArgumentParser(description='Test conformal prediction with time-based coverage analysis')
     
     # MAIN TOGGLE: Predictor type
-    parser.add_argument('--predictor', choices=['basic', 'adaptive', 'algorithm'], default='basic',
-                        help='Choose predictor type: basic (fixed), adaptive (online), or algorithm (AdaptedCAFHT)')
+    parser.add_argument('--predictor', choices=['adaptive', 'algorithm'], default='algorithm',
+                        help='Choose predictor type: adaptive (sliding-window split conformal) or algorithm (AdaptedCAFHT)')
     
     # Experiment sizes & basics
     parser.add_argument('--n_series', type=int, default=None, 
@@ -782,15 +773,7 @@ def main():
     args = parser.parse_args()
 
     # Set predictor-specific defaults
-    if args.predictor == "basic":
-        defaults = {
-            'n_series': 600,
-            'n_train': 1200,
-            'n_cal': 200,
-            'T': 200,
-            'covar_rate_shift': 3.0
-        }
-    elif args.predictor == "adaptive":
+    if args.predictor == "adaptive":
         defaults = {
             'n_series': 500,
             'n_train': 1000,
@@ -847,9 +830,7 @@ def main():
     generator = TimeSeriesGenerator(T=args.T, d=1, seed=args.seed)
 
     # Initialize appropriate predictor
-    if args.predictor == "basic":
-        predictor = BasicConformalPredictor(alpha=args.alpha)
-    elif args.predictor == "adaptive":
+    if args.predictor == "adaptive":
         predictor = OnlineConformalPredictor(alpha=args.alpha, window_size=args.window_size)
     else:  # algorithm
         predictor = AdaptedCAFHT(alpha=args.alpha)
