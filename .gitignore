@@ -3,4 +3,9 @@
 __pycache__/
 *.pyc
 
-.DS_Store
+# macOS Finder / iCloud duplicate artifacts (e.g. "foo 2.json")
+* 2.json
+* 2.pdf
+* 2.png
+* 2.npz
+* 2.csv

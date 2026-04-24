@@ -15,12 +15,7 @@
 
 ### Duplicate artifacts (` 2.json` suffix)
 
-- `finance_tech_noshift_20240701_20240830 2.json`
-- `finance_tech_shift_20240201_20240328 2.json`
-- `finance_tech_shift_20240701_20240830 2.json`
-- `finance_tech_shift_20240801_20240930 2.json`
-- `finance_tech_shift_20241001_20241129 2.json`
-- `finance_tech_shift_20250102_20250228 2.json`
+- None.
 
 ### Synthetic config field naming
 
@@ -31,11 +26,23 @@
 
 - `results_adaptive_noshift_20260414_103751.json`: has `overall` + overall.coverage_se present + has `by_time`
 - `results_adaptive_shift_20260414_103752.json`: has `overall` + overall.coverage_se present + has `by_time`
+- `results_algorithm_dynamic_LRonly_20260423_220742.json`: has `overall` + overall.coverage_se present + has `by_time`
+- `results_algorithm_dynamic_noshift_20260423_220707.json`: has `overall` + overall.coverage_se present + has `by_time`
+- `results_algorithm_dynamic_shift_20260423_220748.json`: has `overall` + overall.coverage_se present + has `by_time`
+- `results_algorithm_dynamicshift_LRandACI_20260424_110424.json`: has `overall` + overall.coverage_se present + has `by_time`
+- `results_algorithm_dynamicshift_LRonly_20260424_110424.json`: has `overall` + overall.coverage_se present + has `by_time`
+- `results_algorithm_dynamicshift_weightone_20260424_110416.json`: has `overall` + overall.coverage_se present + has `by_time`
 - `results_algorithm_noshift_20260206_155850.json`: has `overall` + overall.coverage_se present + has `by_time`
 - `results_algorithm_noshift_20260414_103748.json`: has `overall` + overall.coverage_se present + has `by_time`
+- `results_algorithm_noshift_LRandACI_20260424_110409.json`: has `overall` + overall.coverage_se present + has `by_time`
+- `results_algorithm_noshift_LRonly_20260424_110413.json`: has `overall` + overall.coverage_se present + has `by_time`
+- `results_algorithm_noshift_weightone_20260424_110358.json`: has `overall` + overall.coverage_se present + has `by_time`
 - `results_algorithm_shift_20260206_160044.json`: has `overall` + overall.coverage_se present + has `by_time`
 - `results_algorithm_shift_20260210_121930.json`: has `overall` + overall.coverage_se present + has `by_time`
 - `results_algorithm_shift_20260414_103750.json`: has `overall` + overall.coverage_se present + has `by_time`
+- `results_algorithm_staticshift_LRandACI_20260424_110415.json`: has `overall` + overall.coverage_se present + has `by_time`
+- `results_algorithm_staticshift_LRonly_20260424_110422.json`: has `overall` + overall.coverage_se present + has `by_time`
+- `results_algorithm_staticshift_weightone_20260424_110410.json`: has `overall` + overall.coverage_se present + has `by_time`
 
 ### Missing fields across all experiment JSONs (never populated)
 
@@ -69,11 +76,23 @@ The 7 synthetic files do NOT share common sample sizes:
 
 - `results_adaptive_noshift_20260414_103751.json`: n_seeds=30, n_train=600, n_cal=600, n_series=300, T=20
 - `results_adaptive_shift_20260414_103752.json`: n_seeds=30, n_train=600, n_cal=600, n_series=300, T=20
+- `results_algorithm_dynamic_LRonly_20260423_220742.json`: n_seeds=100, n_train=1000, n_cal=1000, n_series=500, T=40
+- `results_algorithm_dynamic_noshift_20260423_220707.json`: n_seeds=100, n_train=1000, n_cal=1000, n_series=500, T=40
+- `results_algorithm_dynamic_shift_20260423_220748.json`: n_seeds=100, n_train=1000, n_cal=1000, n_series=500, T=40
+- `results_algorithm_dynamicshift_LRandACI_20260424_110424.json`: n_seeds=30, n_train=1000, n_cal=1000, n_series=500, T=40
+- `results_algorithm_dynamicshift_LRonly_20260424_110424.json`: n_seeds=30, n_train=1000, n_cal=1000, n_series=500, T=40
+- `results_algorithm_dynamicshift_weightone_20260424_110416.json`: n_seeds=30, n_train=1000, n_cal=1000, n_series=500, T=40
 - `results_algorithm_noshift_20260206_155850.json`: n_seeds=10, n_train=1000, n_cal=1000, n_series=500, T=20
 - `results_algorithm_noshift_20260414_103748.json`: n_seeds=30, n_train=600, n_cal=600, n_series=300, T=20
+- `results_algorithm_noshift_LRandACI_20260424_110409.json`: n_seeds=30, n_train=1000, n_cal=1000, n_series=500, T=40
+- `results_algorithm_noshift_LRonly_20260424_110413.json`: n_seeds=30, n_train=1000, n_cal=1000, n_series=500, T=40
+- `results_algorithm_noshift_weightone_20260424_110358.json`: n_seeds=30, n_train=1000, n_cal=1000, n_series=500, T=40
 - `results_algorithm_shift_20260206_160044.json`: n_seeds=10, n_train=1000, n_cal=1000, n_series=500, T=20
 - `results_algorithm_shift_20260210_121930.json`: n_seeds=1, n_train=1000, n_cal=1000, n_series=500, T=20
 - `results_algorithm_shift_20260414_103750.json`: n_seeds=30, n_train=600, n_cal=600, n_series=300, T=20
+- `results_algorithm_staticshift_LRandACI_20260424_110415.json`: n_seeds=30, n_train=1000, n_cal=1000, n_series=500, T=40
+- `results_algorithm_staticshift_LRonly_20260424_110422.json`: n_seeds=30, n_train=1000, n_cal=1000, n_series=500, T=40
+- `results_algorithm_staticshift_weightone_20260424_110410.json`: n_seeds=30, n_train=1000, n_cal=1000, n_series=500, T=40
 
 - Older `20260206` files: n_train=1000, n_cal=1000, n_series=500, n_seeds=10.
 - Single-seed outlier `20260210_121930`: n_seeds=1 (not a multi-seed run).
