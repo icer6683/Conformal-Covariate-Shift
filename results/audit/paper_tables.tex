@@ -1,0 +1,246 @@
+% ============================================================
+%  Experiment Design + Paper Tables — Weighted CAFHT
+%  Generated 2026-04-24  |  Target: 1 - alpha = 0.90
+%
+%  Required packages:
+%    \usepackage{booktabs}
+%    \usepackage{multirow}
+%    \usepackage{siunitx}   % for S column alignment (optional)
+%    \usepackage{xcolor}
+%    \usepackage{colortbl}
+% ============================================================
+
+
+% ============================================================
+%  SECTION: Experiment Design
+% ============================================================
+
+\section{Experiments}
+\label{sec:experiments}
+
+We evaluate Weighted CAFHT against two ablations on synthetic time series, S\&P~500 intraday returns, and medical data. All experiments set $\alpha = 0.10$ (target
+coverage $1 - \alpha = 0.90$). Three algorithm variants are compared
+throughout:
+%
+\begin{itemize}[nosep]
+  \item \textbf{Weighted CAFHT}: full method — likelihood-ratio (LR) covariate
+        reweighting combined with per-series ACI $\alpha_t$ updating.
+  \item \textbf{Uniform weights}: LR weighting disabled (uniform calibration
+        weights); per-series ACI update retained. Isolates the contribution of
+        adaptive coverage correction.
+  \item \textbf{Zero $\gamma$}: LR weighting enabled; ACI step size fixed at
+        $\gamma = 0$ (no $\alpha_t$ update). Isolates the contribution of
+        covariate reweighting.
+\end{itemize}
+
+\subsection{Synthetic Data}
+\label{sec:experiments:synthetic}
+
+\paragraph{Data-generating processes.}
+We consider two synthetic DGPs, each generating $N_{\mathrm{train}} = 600$
+training series, $N_{\mathrm{cal}} = 600$ calibration series, and
+$N_{\mathrm{test}} = 300$ test series of length $T = 20$.
+
+\textit{Static-X}: Each series is driven by a scalar covariate $X^{(i)}$
+drawn once at series creation time.  Training and calibration covariates
+follow $X \sim \mathrm{Pois}(\lambda)$ with $\lambda = 1$; under the
+\emph{static shift} condition the test covariates are redrawn from
+$\mathrm{Pois}(\tilde\lambda)$ with $\tilde\lambda = 2$.  Conditional on $X$,
+the response follows an AR(1) process:
+%
+\[
+  Y_t = \rho \, Y_{t-1} + \beta X + \delta t + \varepsilon_t, \quad
+  \varepsilon_t \overset{\text{i.i.d.}}{\sim} \mathcal{N}(0, \sigma^2),
+\]
+%
+with $\rho = 0.7$, $\beta = 1.0$, $\delta = 0$ (no deterministic drift), and
+$\sigma = 0.2$.  Initial values are shared between train and test to hold
+$Y_0$ fixed under shift.
+
+\textit{Dynamic-X}: The covariate itself evolves as an AR(1):
+$X_{t+1} = \rho_X X_t + \kappa_X t + \eta_t$, $\eta_t \sim \mathcal{N}(0,
+\sigma_X^2)$.  Under the \emph{dynamic shift} condition the entire covariate
+path is regenerated under shifted parameters $(\tilde\rho_X, \tilde\kappa_X,
+\tilde\sigma_X)$, while $Y_0$ is held fixed.
+
+\paragraph{Prediction model.}
+At each time step $t$, an AR(1) model is fitted by OLS on all training
+trajectories up to step $t$, producing point forecasts $\hat Y_{t+1}^{(i)}$.
+The nonconformity score is the absolute residual
+$s_t^{(i)} = |Y_t^{(i)} - \hat Y_t^{(i)}|$.
+
+\paragraph{Likelihood-ratio estimation.}
+For each time step the test set is split uniformly at random into two halves
+$H_1, H_2$.  A logistic classifier with balanced class weights is fitted on
+$\mathcal{D}_{\mathrm{train}} \cup H_2$ (labels $0/1$) and used to score
+$H_1$, and vice versa.  This cross-half procedure prevents leakage of
+deployment-distribution information into the calibration weights.
+Estimated density ratios $\hat w(z) \propto \hat p(z) / (1 - \hat p(z))$ are
+clipped at $5\times$ the mean weight and renormalized to sum to one.
+
+\paragraph{ACI update and $\gamma$ selection.}
+Each test series maintains its own coverage level $\alpha_t^{(i)}$, updated
+after each observation via
+%
+\[
+  \alpha_{t+1}^{(i)} = \alpha_t^{(i)}
+    + \gamma \bigl(\alpha - \mathbf{1}\bigl[Y_{t+1}^{(i)} \notin
+      \hat C_{t+1}^{(i)}\bigr]\bigr),
+\]
+%
+clipped to $(10^{-6},\, 1 - 10^{-6})$.  The step size $\gamma$ is selected
+every 10 steps by a held-out simulation on a three-way split of the training
+data; the search grid is $\Gamma = \{0.001, 0.005, 0.01, 0.05, 0.1\}$.
+
+\paragraph{Evaluation.}
+Each configuration is replicated over 30 independent seeds (base seed 1000).
+We report pooled empirical coverage (fraction of covered intervals across all
+series and time steps), the mean per-seed absolute deviation
+$\overline{|\Delta|} = \frac{1}{30}\sum_{s=1}^{30}
+|\hat{\mathrm{cov}}_s - (1-\alpha)|$ from the target, and mean interval
+width.
+
+% -------------------------------------------------------
+
+\subsection{Financial Data}
+\label{sec:experiments:finance}
+
+\paragraph{Data.}
+We use daily S\&P~500 intraday return data from 2024 collected via
+\texttt{yfinance}.  The response variable is
+$Y_t = \mathrm{Close}_t / \mathrm{Open}_t - 1$ for each ticker on each
+trading day.  Four covariates are constructed for each ticker-day pair:
+%
+\begin{itemize}[nosep]
+  \item \textbf{OvernightGapReturn}: overnight return (not lagged).
+  \item \textbf{Above52wLowReturn}: distance above the 52-week low, computed
+        from pre-sample data to prevent lookahead bias (not lagged).
+  \item \textbf{TurnoverRatio} (lagged one day).
+  \item \textbf{DailyRangeReturn} (lagged one day).
+\end{itemize}
+
+\paragraph{Covariate shift design.}
+We test two sector-based shift conditions.  In the \emph{Technology} setting,
+all Technology-sector tickers form the test set and the remaining $\sim\!480$
+tickers provide the training and calibration pool.  In the \emph{Utilities}
+setting, Utilities-sector tickers form the test set.  Sector membership is
+fixed by GICS classification; the resulting covariate distributions differ
+meaningfully from the pool (maximum Kolmogorov–Smirnov statistic $\approx
+0.49$ for Technology, $\approx 0.75$ for Utilities, driven primarily by
+beta-to-market features).  A \emph{Mixed} null baseline randomly draws 15\%
+of all tickers as the test set, inducing no systematic sector shift.
+
+\paragraph{Rolling windows and train/cal split.}
+Experiments are run over 13 rolling two-month windows covering
+January--March 2024.  Within each window, the non-test ticker pool is split
+50/50 into training and calibration sets (seed 42).  The Technology and
+Utilities conditions each yield 13 independent coverage observations; the
+Mixed condition uses a single window.
+
+\paragraph{Prediction model.}
+At each time step $t$, an OLS regression of $Y$ on the four covariates is
+fitted pooled across all training tickers and all time steps up to $t$,
+producing ticker-level forecasts $\hat Y_{t+1}^{(i)}$.  The nonconformity
+score is $s_t^{(i)} = |Y_t^{(i)} - \hat Y_t^{(i)}|$.
+
+\paragraph{Likelihood-ratio estimation.}
+The LR featurizer represents each ticker at time $t$ by: the mean, standard
+deviation, and AR(1) coefficient of $Y$ over a rolling window of 10 steps,
+together with the temporal mean and standard deviation of each of the four
+covariates over the full prefix (11 features total).  As in the synthetic
+setting, a cross-half logistic classifier estimates density ratios with
+balanced class weights and $5\times$-mean clipping.
+
+\paragraph{ACI update and $\gamma$ selection.}
+The per-series ACI update is identical to the synthetic setting.  The search
+grid is $\Gamma = \{0.001, 0.005, 0.01, 0.05\}$ for Technology and
+$\Gamma = \{0.001, 0.005, 0.01, 0.05, 0.1\}$ for Utilities; $\gamma$ is
+reselected every 10 steps.
+
+\paragraph{Evaluation.}
+For Technology and Utilities we report the mean per-window coverage and the
+mean per-window absolute deviation $\overline{|\Delta|}$ from the target
+$1-\alpha = 0.90$ averaged across the 13 windows.  Mean interval width is
+reported in intraday return units.  The Mixed null baseline is reported for a
+single window.
+
+% ============================================================
+%  TABLE 1: Synthetic Results
+% ============================================================
+
+\begin{table}[ht]
+\centering
+\setlength{\tabcolsep}{8pt}
+\renewcommand{\arraystretch}{1.15}
+\caption{%
+  Synthetic results ($T=20$, $\alpha=0.10$, 30 seeds, target coverage $= 0.90$).
+  \textit{Coverage}: pooled empirical coverage across all series and time steps.
+  $\overline{|\Delta|}$: mean per-seed absolute deviation from $1-\alpha$.
+  \textit{Width}: mean prediction interval width.
+}
+\label{tab:synthetic}
+\begin{tabular}{@{} l l S[table-format=1.3] S[table-format=1.3] S[table-format=1.3] @{}}
+\toprule
+\textbf{Data condition} & \textbf{Algorithm}
+  & \textbf{Coverage} & $\boldsymbol{\overline{|\Delta|}}$ & \textbf{Width} \\
+\midrule
+\multirow{3}{*}{No shift}
+  & Weighted CAFHT      & 0.901 & 0.001 & 1.395 \\
+  & Uniform weights     & 0.901 & 0.001 & 1.394 \\
+  & Zero $\gamma$       & 0.901 & 0.001 & 1.395 \\
+\cmidrule(l){1-5}
+\multirow{3}{*}{Static shift}
+  & Weighted CAFHT      & 0.891 & 0.009 & 1.501 \\
+  & Uniform weights     & 0.869 & 0.031 & 1.445 \\
+  & Zero $\gamma$       & 0.890 & 0.010 & 1.498 \\
+\cmidrule(l){1-5}
+\multirow{3}{*}{Dynamic shift}
+  & Weighted CAFHT      & 0.841 & 0.059 & 1.339 \\
+  & Uniform weights     & 0.836 & 0.064 & 1.323 \\
+  & Zero $\gamma$       & 0.838 & 0.062 & 1.332 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+% ============================================================
+%  TABLE 2: Finance Results
+% ============================================================
+
+\begin{table}[ht]
+\centering
+\setlength{\tabcolsep}{8pt}
+\renewcommand{\arraystretch}{1.15}
+\caption{%
+  Finance results (S\&P~500 intraday returns, $\alpha=0.10$, seed~42, target
+  coverage $= 0.90$).
+  Technology and Utilities: mean over 13 rolling windows.
+  Mixed (null baseline): single window, 15\% random test draw.
+  $\overline{|\Delta|}$: mean per-window absolute deviation from $1-\alpha$.
+  \textit{Width}: mean interval width (intraday return units).
+  Utilities uses $\gamma$-grid $\{0.001, 0.005, 0.01, 0.05, 0.1\}$;
+  Technology uses $\{0.001, 0.005, 0.01, 0.05\}$.
+}
+\label{tab:finance}
+\begin{tabular}{@{} l l S[table-format=1.3] S[table-format=1.3] S[table-format=1.4] @{}}
+\toprule
+\textbf{Sector} & \textbf{Algorithm}
+  & \textbf{Coverage} & $\boldsymbol{\overline{|\Delta|}}$ & \textbf{Width} \\
+\midrule
+\multirow{3}{*}{Technology}
+  & Weighted CAFHT      & 0.888 & 0.017 & 0.0505 \\
+  & Uniform weights     & 0.880 & 0.024 & 0.0493 \\
+  & Zero $\gamma$       & 0.872 & 0.029 & 0.0465 \\
+\cmidrule(l){1-5}
+\multirow{3}{*}{Utilities}
+  & Weighted CAFHT      & 0.923 & 0.026 & 0.0451 \\
+  & Uniform weights     & 0.924 & 0.027 & 0.0454 \\
+  & Zero $\gamma$       & 0.932 & 0.034 & 0.0447 \\
+\cmidrule(l){1-5}
+\multirow{3}{*}{Mixed (null)}
+  & Weighted CAFHT      & 0.911 & 0.011 & 0.0414 \\
+  & Uniform weights     & 0.911 & 0.011 & 0.0413 \\
+  & Zero $\gamma$       & 0.907 & 0.007 & 0.0417 \\
+\bottomrule
+\end{tabular}
+\end{table}
