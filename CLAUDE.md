@@ -14,7 +14,7 @@ Target coverage guarantee: P(Y^{n+1}_t ∈ Ĉ_t, ∀t ∈ [T]) ≥ 1 − α.
 
 ## LaTeX paper folder — READ ONLY
 
-A LaTeX paper folder exists at `/Users/andrewlou/Downloads/LaTeX Paper` (listed in additional working directories).
+The LaTeX paper folder lives inside the repo at `LaTeX Paper/` (project root). It contains `main.tex` and the figure assets used by the paper.
 
 **Rules:**
 - **Do not edit, write, or modify any file in that folder.** No `Edit`, `Write`, or `NotebookEdit` calls inside it.
