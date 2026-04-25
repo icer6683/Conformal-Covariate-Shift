@@ -164,6 +164,78 @@ $1-\alpha = 0.90$ averaged across the 13 windows.  Mean interval width is
 reported in intraday return units.  The Mixed null baseline is reported for a
 single window.
 
+% -------------------------------------------------------
+
+\subsection{Medical Data}
+\label{sec:experiments:medical}
+
+\paragraph{Data.}
+We use a sepsis cohort extracted from MIMIC-III consisting of 15{,}091 ICU
+admissions, each represented by 24 hourly time stamps.  The response variable
+is the hourly NaCl 0.9\% dosage trajectory $Y_t$ (in mL/hr); the prediction
+task is to forecast $Y_{t+1}$ from information available at time $t$.  Three
+time-varying physiological covariates are used at each hour: heart rate,
+respiratory rate, and oxygen saturation by pulse oximetry.  Each patient
+also carries three static covariates --- age, gender (binary), and ethnicity
+(grouped into five categories and one-hot encoded with WHITE as the
+reference) --- yielding six static features.  Zero entries in the
+physiological trajectories are imputed by the patient-level median of the
+nonzero values; zeros in NaCl are left unchanged because the medication is
+sparse by design.
+
+\paragraph{Covariate shift design.}
+The natural shift is induced by early-ICU vasopressor exposure.  Patients
+with no Norepinephrine in the first 12 hours form the TrainCal pool
+($n = 9{,}264$); patients with any Norepinephrine in the first 12 hours form
+the Test pool ($n = 5{,}827$).  Norepinephrine is itself \emph{not} used as
+a predictive covariate; it serves only as the split mechanism, so the shift
+between train and test covariate distributions arises endogenously from the
+clinical decision to start vasopressors.
+
+\paragraph{Train/cal split and subsampling.}
+Within each replication we subsample 1{,}000 patients from the TrainCal pool
+and 500 patients from the Test pool, using a per-seed random subsample.  The
+1{,}000 TrainCal patients are split 50/50 into training and calibration sets.
+
+\paragraph{Prediction model.}
+At each time step $t$, a one-step-ahead autoregressive OLS is fitted on all
+training trajectories using the lagged target as a regressor:
+%
+\[
+  Y_{t+1} \approx \beta_0 + \beta_1 Y_t + \boldsymbol{\beta}_X^{\!\top} X_t
+                + \boldsymbol{\beta}_S^{\!\top} S,
+\]
+%
+where $X_t$ are the three physiological covariates at time $t$ and $S$ are
+the six static features.  All predictors are evaluated at time $t$, so no
+future leakage occurs.  The nonconformity score is
+$s_t^{(i)} = |Y_{t+1}^{(i)} - \hat Y_{t+1}^{(i)}|$.
+
+\paragraph{Likelihood-ratio estimation.}
+The LR featurizer represents each patient at time $t$ by five summary
+statistics (mean, standard deviation, minimum, maximum, last value) computed
+over the prefix of $Y$ and each of the three physiological covariates,
+together with the six static features (26 features total).  Features are
+standardized using training-set means and standard deviations and reused on
+test and calibration so distributional differences are preserved.  The
+cross-half logistic classifier with balanced class weights and $5\times$-mean
+clipping is used as in the other settings.
+
+\paragraph{ACI update and $\gamma$ selection.}
+The per-series ACI update is identical to the synthetic and finance
+settings.  The search grid is finer to accommodate the larger residual
+scale of NaCl dosing,
+$\Gamma = \{10^{-6}, 5{\cdot}10^{-6}, 10^{-5}, 5{\cdot}10^{-5},
+10^{-4}, 5{\cdot}10^{-4}, 10^{-3}, 5{\cdot}10^{-3}, 10^{-2}\}$,
+and $\gamma$ is reselected every 5 steps.
+
+\paragraph{Evaluation.}
+Each algorithm is replicated over 10 independent seeds (base seed 1000),
+each seed yielding an independent TrainCal/Test subsample.  We report the
+mean per-seed coverage, the mean per-seed absolute deviation
+$\overline{|\Delta|}$ from the target $1-\alpha = 0.90$, and the mean
+interval width in mL/hr.
+
 % ============================================================
 %  TABLE 1: Synthetic Results
 % ============================================================
@@ -241,6 +313,43 @@ single window.
   & Weighted CAFHT      & 0.911 & 0.011 & 0.0414 \\
   & Uniform weights     & 0.911 & 0.011 & 0.0413 \\
   & Zero $\gamma$       & 0.907 & 0.007 & 0.0417 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+% ============================================================
+%  TABLE 3: Medical Results
+% ============================================================
+
+\begin{table}[ht]
+\centering
+\setlength{\tabcolsep}{8pt}
+\renewcommand{\arraystretch}{1.15}
+\caption{%
+  Medical results (MIMIC-III sepsis cohort, $T=23$, $\alpha=0.10$, 10 seeds,
+  target coverage $= 0.90$).
+  Each replication subsamples 1{,}000 TrainCal and 500 Test patients from
+  the cohort.
+  \textit{Coverage}: mean per-seed empirical coverage across all patients
+  and time steps.
+  $\overline{|\Delta|}$: mean per-seed absolute deviation from $1-\alpha$.
+  \textit{Width}: mean prediction interval width in mL/hr.
+  Search grid for $\gamma$ is
+  $\{10^{-6}, 5{\cdot}10^{-6}, 10^{-5}, 5{\cdot}10^{-5}, 10^{-4},
+    5{\cdot}10^{-4}, 10^{-3}, 5{\cdot}10^{-3}, 10^{-2}\}$
+  and is reselected every 5 steps.
+}
+\label{tab:medical}
+\begin{tabular}{@{} l l S[table-format=1.3] S[table-format=1.3] S[table-format=3.2] @{}}
+\toprule
+\textbf{Data condition} & \textbf{Algorithm}
+  & \textbf{Coverage} & $\boldsymbol{\overline{|\Delta|}}$ & \textbf{Width} \\
+\midrule
+\multirow{3}{*}{Norepinephrine shift}
+  & Weighted CAFHT      & 0.897 & 0.010 & 211.61 \\
+  & Uniform weights     & 0.928 & 0.028 & 264.55 \\
+  & Zero $\gamma$       & 0.896 & 0.011 & 195.08 \\
 \bottomrule
 \end{tabular}
 \end{table}

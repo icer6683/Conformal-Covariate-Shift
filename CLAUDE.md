@@ -219,15 +219,21 @@ Config: n_train=600, n_cal=600, n_series=300, T=20, n_seeds=30. C5/C6 (dynamic-X
 
 Sector separability (KS vs rest): Utilities max KS=0.75 (strong, driven by beta_spy); Technology max KS≈0.49; Healthcare max KS=0.42 (weak — LR classifier near-uniform weights for healthcare).
 
-### Medical (MIMIC-III sepsis, n_traincal=1000, n_test=500, 10 seeds)
-| File | Condition | Coverage (mean±std/seeds) | Width mean (mL/hr) |
-|---|---|---|---|
-| `results/medical/json/medical_ms_noshift.json` | uniform+ACI | 0.9766 ± 0.006 | 684 ± 57 |
-| `results/medical/json/medical_ms_shift.json` | LR+ACI | 0.9413 ± 0.007 | 420 ± 48 |
-| `results/medical/json/medical_ms_LRonly.json` | LR only, γ=0 | 0.9383 ± 0.006 | 420 ± 48 |
-| `results/medical/pdf/medical_covariate_shift.pdf` | KDE shift plot | NaCl KL=0.206, RR KL=0.022, O2Sat KL=0.050 | — |
+### Medical (MIMIC-III sepsis, n_traincal=1000, n_test=500, 10 seeds, base_seed=1000)
 
-Note: LR weighting shifts coverage from +7.7pp (noshift) to +4.1pp above target; ACI contributes negligibly on top of LR (Δ=0.003).
+**Model**: one-step-ahead autoregressive OLS (`NaCl_{t+1} ≈ β·NaCl_t + γ·X_t + δ·S`). The earlier cross-sectional / future-leaking model was replaced on 2026-04-25 with the lagged formulation; results below are with the corrected predictor.
+
+| File | Condition | Coverage (mean ± std) | Width mean ± std (mL/hr) | Early cov. | Late cov. | Cov. degradation |
+|---|---|---|---|---|---|---|
+| `results/medical/json/medical_multi10_full.json` | **LR + ACI (proposed)** | **89.73% ± 1.14%** | **211.61 ± 32.97** | 89.83% | 89.77% | +0.06% |
+| `results/medical/json/medical_multi10_aci_only.json` | ACI only (uniform weights) | 92.80% ± 0.91% | 264.55 ± 30.21 | 91.92% | 93.28% | −1.36% |
+| `results/medical/json/medical_multi10_lr_only.json` | LR only, γ=0 (no ACI) | 89.55% ± 1.18% | 195.08 ± 20.46 | 89.83% | 89.31% | +0.52% |
+| `results/medical/pdf/medical_covariate_shift.pdf` | KDE shift plot | NaCl KL=0.206, RR KL=0.022, O2Sat KL=0.050 | — | — | — | — |
+
+Key observations:
+- **Weighted CAFHT (full method)** lands almost exactly on the 90% target (89.73 ± 0.36 % SE) with the flattest coverage trajectory (degradation +0.06%, essentially zero).
+- **ACI only** over-covers by ~3pp and pays for it with **25% wider intervals** (264 vs 212 mL).
+- **LR only (γ=0)** has near-target coverage and the narrowest intervals (195 mL) but lacks online self-correction; on a different seed-set the LR weights could mis-estimate the shift and there is no ACI cushion to recover.
 
 ---
 
@@ -302,10 +308,10 @@ No notebooks, no OnlineConformalPredictor baseline, no MIMIC-III extraction pipe
 ### 2. Implemented methods
 
 #### Proposed method: AdaptedCAFHT with linear covariate model
-- **Code name**: `AdaptedCAFHT` (imported from `core/algorithm.py`); prediction model `LinearCovariateModel` (defined in `medical/medical_conformal.py:443`)
+- **Code name**: `AdaptedCAFHT` (imported from `core/algorithm.py`); prediction model `LinearCovariateModel` (defined in `medical/medical_conformal.py:451`)
 - **Paper name**: Weighted CAFHT
 - **File/function**: `medical/medical_conformal.py:run_medical_experiment`
-- **Category**: Proposed combined method (LR weighting + ACI). Replaces AR(1) with cross-sectional OLS on dynamic + static covariates.
+- **Category**: Proposed combined method (LR weighting + ACI). Replaces AR(1) with a one-step-ahead autoregressive OLS on (lagged NaCl + dynamic covariates at time t + static covariates).
 - **Hyperparameters**:
   - α = 0.1 (default), cal_frac = 0.5, seed = 42
   - gamma_grid = [1e-6, 5e-6, 1e-5, 5e-5, 1e-4, 5e-4, 1e-3, 5e-3, 1e-2] (finer grid than finance/synthetic)
@@ -315,18 +321,18 @@ No notebooks, no OnlineConformalPredictor baseline, no MIMIC-III extraction pipe
 #### Unweighted baseline (no separate script)
 - **Code name**: same `run_medical_experiment` with `--with_shift` omitted (`with_shift=False`)
 - **Paper name**: Split Conformal (no LR weighting, with ACI)
-- **File/function**: `medical/medical_conformal.py:run_medical_experiment` (else-branch at line 851)
+- **File/function**: `medical/medical_conformal.py:run_medical_experiment` (else-branch at line 898)
 - **Category**: ACI conformal without likelihood-ratio reweighting. Uniform weights used.
 - **Note**: No separate `OnlineConformalPredictor` (AR(1)) baseline is implemented for the medical domain.
 
 #### Prediction model: LinearCovariateModel
-- **Code name**: `LinearCovariateModel` (`medical/medical_conformal.py:443`)
+- **Code name**: `LinearCovariateModel` (`medical/medical_conformal.py:451`)
 - **Paper name**: Cross-sectional OLS predictor
-- **Equation**: `NaCl_t ~ β₀ + β₁·HR_t + β₂·RR_t + β₃·O2Sat_t + β₄·Age + β₅·gender_M + β₆·eth_BLACK + β₇·eth_HISPANIC + β₈·eth_ASIAN + β₉·eth_OTHER`
+- **Equation** (corrected 2026-04-25): `NaCl_{t+1} ~ β₀ + β₁·NaCl_t + β₂·HR_t + β₃·RR_t + β₄·O2Sat_t + β₅·Age + β₆·gender_M + β₇·eth_BLACK + β₈·eth_HISPANIC + β₉·eth_ASIAN + β₁₀·eth_OTHER`. All predictors evaluated at time t — no future leakage. Lagged NaCl_t coefficient ≈ 0.89 (strong autocorrelation).
 - **Fitted**: pooled across all (patient, timestep) pairs in the training prefix at each hour t via `np.linalg.lstsq`.
 
 #### Featurizer for LR classifier: `_richer_featurize_prefixes`
-- **Code name**: `_richer_featurize_prefixes` (`medical/medical_conformal.py:303`); monkey-patched onto predictor via `types.MethodType`
+- **Code name**: `_richer_featurize_prefixes` (`medical/medical_conformal.py:311`); monkey-patched onto predictor via `types.MethodType`
 - **Features (26 total)**:
   - 5 stats × 4 dynamic variables (NaCl + HR + RR + O2Sat): mean, std, min, max, last = 20 features
   - 6 static: Age, gender_M, eth_BLACK, eth_HISPANIC, eth_ASIAN, eth_OTHER
@@ -334,7 +340,7 @@ No notebooks, no OnlineConformalPredictor baseline, no MIMIC-III extraction pipe
 - **Auxiliary storage**: `predictor._X_ctx` (dynamic covariate prefix), `predictor._S_ctx` (static covariates) — set by caller before each featurize call
 
 #### Gamma selection: `_select_gamma`
-- **Code name**: `_select_gamma` (`medical/medical_conformal.py:505`)
+- **Code name**: `_select_gamma` (`medical/medical_conformal.py:533`)
 - **Mechanism**: 3-way split of training data (fit / cal / eval, each ≈n/3); simulates ACI without LR weighting; picks γ with second-half coverage closest to 1−α
 - **Called**: every 5 steps in the main loop
 
@@ -422,9 +428,9 @@ No notebooks, no OnlineConformalPredictor baseline, no MIMIC-III extraction pipe
 | Data pickle (`medical/sepsis_experiment_data_nacl_target.pkl`) | **Completed** | Present; 9264 TrainCal + 5827 Test patients (split by Norep in first 12 h); verified loadable |
 | Data dictionary (`medical/medical_data.md`) | **Completed** | Cohort, imputation, split, dict structure, usage examples |
 | Experiment script (`medical/medical_conformal.py`) | **Completed** | Full CLI, LR weighting, ACI, model, featurizer, gamma selection, plot |
-| Run results (JSON/PDF) for 3 conditions | **Completed** | `results/medical/json/medical_ms_{noshift,shift,LRonly}.json`; PDFs in `results/medical/pdf/` |
+| Run results (JSON/PDF) for 3 conditions | **Completed** | `results/medical/json/medical_multi10_{full,aci_only,lr_only}.json`; PDFs in `results/medical/pdf/`. Latest run 2026-04-25 with corrected lagged-AR predictor. |
 | Multi-seed wrapper for medical | **Completed** | `medical/multi_seed_medical.py`; 10 seeds, base_seed=1000, n_traincal=1000, n_test=500 |
 | Covariate shift diagnostic plot (KDE / KL) | **Completed** | `medical/plot_medical_covariate_shift.py`; output `results/medical/pdf/medical_covariate_shift.pdf` |
 | Baseline comparison (OnlineConformalPredictor on medical data) | **Not implemented** | No equivalent of finance_adaptive.py for the medical domain |
-| Ablation: LR weighting without ACI (γ=0) as separate paper figure | **Partial** | LRonly multi-seed exists (`medical_ms_LRonly.json`); no side-by-side comparison figure |
+| Ablation: LR weighting without ACI (γ=0) as separate paper figure | **Partial** | LR-only multi-seed exists (`medical_multi10_lr_only.json`); no side-by-side comparison figure |
 | MIMIC-III extraction pipeline (upstream of pkl) | **Not in repo** | Mentioned in `medical_conformal.py` docstring; code not present |
