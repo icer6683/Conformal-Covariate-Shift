@@ -87,12 +87,16 @@ HOW IT WORKS
           ACI alpha update: alpha_{t+1} = alpha_t + gamma*(alpha - err_t)
 
   Prediction model:
-    Cross-sectional linear regression at each hour:
-      NaCl_t ~ beta_0 + beta_1*HR_t + beta_2*RR_t + beta_3*O2Sat_t
-             + beta_4*Age + beta_5*gender_M
-             + beta_6*eth_BLACK + beta_7*eth_HISPANIC + beta_8*eth_ASIAN
-             + beta_9*eth_OTHER
-    fitted by OLS across all (patient, timestep) pairs in the training prefix.
+    One-step-ahead autoregressive linear regression (predicts NaCl_{t+1} from
+    information available at time t — no future leakage):
+      NaCl_{t+1} ~ beta_0 + beta_1*NaCl_t
+                 + beta_2*HR_t + beta_3*RR_t + beta_4*O2Sat_t
+                 + beta_5*Age + beta_6*gender_M
+                 + beta_7*eth_BLACK + beta_8*eth_HISPANIC
+                 + beta_9*eth_ASIAN + beta_10*eth_OTHER
+    fitted by OLS across all (patient, lagged-step) pairs (s -> s+1) in the
+    training prefix. At prediction time t -> t+1, only Y_test[:, t, :] and
+    X_test[:, t, :] are used; X_test[:, t+1, :] is NOT consulted.
 
   Conformity score:
     |NaCl_true - NaCl_pred|   (absolute residual)
@@ -192,7 +196,7 @@ ETHNICITY_MAP = {
 # Everything not in the map goes to OTHER
 ETHNICITY_DUMMIES = ["BLACK", "HISPANIC", "ASIAN", "OTHER"]  # WHITE = reference
 
-GAMMA_GRID = [0.000001, 0.000005, 0.00001, 0.00005, 0.0001, 0.0005, 0.001, 0.005, 0.01]
+GAMMA_GRID = [0.000001, 0.00001, 0.0001, 0.001, 0.01, 0.1, 1]
 
 # Number of static features after encoding
 N_STATIC = 1 + 1 + len(ETHNICITY_DUMMIES)  # Age + gender_M + 4 ethnicity dummies = 6
@@ -446,14 +450,18 @@ def _print_classifier_diagnostic(predictor, cal_feat, t):
 
 class LinearCovariateModel:
     """
-    Cross-sectional OLS model:
-      NaCl_t ~ beta_0 + beta_1*HR_t + beta_2*RR_t + beta_3*O2Sat_t
-             + beta_4*Age + beta_5*gender_M
-             + beta_6*eth_BLACK + beta_7*eth_HISPANIC + beta_8*eth_ASIAN
-             + beta_9*eth_OTHER
+    One-step-ahead autoregressive OLS model:
+      NaCl_{t+1} ~ beta_0 + beta_1*NaCl_t
+                 + beta_2*HR_t + beta_3*RR_t + beta_4*O2Sat_t
+                 + beta_5*Age + beta_6*gender_M
+                 + beta_7*eth_BLACK + beta_8*eth_HISPANIC
+                 + beta_9*eth_ASIAN + beta_10*eth_OTHER
 
+    All predictors are evaluated at time t; the target is the next-hour NaCl.
     Dynamic covariates vary per (patient, timestep); static covariates are
-    constant per patient but tiled across timesteps for design matrix assembly.
+    constant per patient and tiled across pair-steps for design matrix
+    assembly. Training pairs are formed by teacher-forcing on the observed
+    NaCl trajectory (target = NaCl_{s+1}, inputs = (NaCl_s, X_s, S)).
     """
 
     def __init__(self, cov_names, static_names):
@@ -466,38 +474,54 @@ class LinearCovariateModel:
         """
         Parameters
         ----------
-        Y_train : (n, L_prefix, 1)   NaCl 0.9% prefix
-        X_train : (n, L_prefix, n_cov)   dynamic covariate prefix
-        S_train : (n, N_STATIC)   static covariates
+        Y_train : (n, L_prefix, 1)   NaCl 0.9% prefix; uses indices 0..L-1.
+        X_train : (n, L_prefix, n_cov)   dynamic covariate prefix; same indexing.
+        S_train : (n, N_STATIC)   static covariates per patient.
+
+        Builds (input_s, target_{s+1}) pairs for s = 0..L-2 (i.e. L-1 pairs
+        per patient). The design matrix has columns
+            [1, NaCl_s, HR_s, RR_s, O2Sat_s, Age, gender_M, eth_*]
+        and the response is NaCl_{s+1}.
         """
         n, L, n_cov = X_train.shape
         if L < 2:
             return
-        y = Y_train[:, :, 0].reshape(-1)   # (n * L,)
-        X_dyn = X_train.reshape(-1, n_cov)  # (n * L, n_cov)
-        # Tile static covariates: each patient's statics repeated L times
-        S_tiled = np.repeat(S_train, L, axis=0)  # (n * L, N_STATIC)
-        X_design = np.hstack([np.ones((len(y), 1)), X_dyn, S_tiled])
+        n_pairs = L - 1
+        # Inputs at times 0..L-2
+        y_lag = Y_train[:, :n_pairs, 0].reshape(-1, 1)        # (n*(L-1), 1)
+        X_lag = X_train[:, :n_pairs, :].reshape(-1, n_cov)    # (n*(L-1), n_cov)
+        # Targets at times 1..L-1
+        y = Y_train[:, 1:, 0].reshape(-1)                     # (n*(L-1),)
+        # Tile static covariates: each patient's statics repeated (L-1) times
+        S_tiled = np.repeat(S_train, n_pairs, axis=0)         # (n*(L-1), N_STATIC)
+        X_design = np.hstack([
+            np.ones((len(y), 1)),
+            y_lag,
+            X_lag,
+            S_tiled,
+        ])
         self.beta, *_ = np.linalg.lstsq(X_design, y, rcond=None)
         resid = y - X_design @ self.beta
         self.noise_std = float(np.std(resid, ddof=X_design.shape[1]))
         if verbose:
-            print(f"  [Model] Fitted on {n} patients x {L} steps")
+            print(f"  [Model] Fitted on {n} patients x {n_pairs} pair-steps")
             print(f"  [Model] Residual std : {self.noise_std:.4f}")
             print(f"  [Model] Coefficients :")
             print(f"            intercept = {self.beta[0]:.4f}")
-            all_names = list(self.cov_names) + list(self.static_names)
+            all_names = ["NaCl 0.9% (lag)"] + list(self.cov_names) + list(self.static_names)
             for name, coef in zip(all_names, self.beta[1:]):
                 print(f"            {name:42s} = {coef:.4f}")
 
-    def predict(self, x_dyn, s_static):
+    def predict(self, y_prev, x_dyn, s_static):
         """
-        Predict NaCl 0.9% given dynamic covariate vector x_dyn (n_cov,)
-        and static covariate vector s_static (N_STATIC,).
+        Predict NaCl 0.9% at time t+1 given:
+          y_prev    : float   — observed NaCl at time t
+          x_dyn     : (n_cov,) — dynamic covariates at time t
+          s_static  : (N_STATIC,) — static covariates
         """
         if self.beta is None:
             return 0.0
-        features = np.concatenate([[1.0], x_dyn, s_static])
+        features = np.concatenate([[1.0, float(y_prev)], x_dyn, s_static])
         return float(features @ self.beta)
 
 
@@ -542,17 +566,22 @@ def _select_gamma(Y_train, X_train, S_train, cov_names, static_names,
         predictor = AdaptedCAFHT(alpha=base_alpha)
         alpha_series = np.full(n_eval, base_alpha, dtype=float)
         cov_hist = []
-        for t in range(horizon + 1):
+        for t in range(horizon):
+            # Fit on prefix [:t+2] -> (t+1) lagged pairs s=0..t per patient
             sel_model = LinearCovariateModel(cov_names, static_names)
-            sel_model.fit(Y_fit_sel[:, :t+1, :], X_fit_sel[:, :t+1, :],
+            sel_model.fit(Y_fit_sel[:, :t+2, :], X_fit_sel[:, :t+2, :],
                           S_fit_sel)
             predictor.noise_std = sel_model.noise_std
+            # Calibration: pairs s=0..t -> predict NaCl_{s+1} from
+            # (NaCl_s, X_s, S); score = |NaCl_{s+1} - pred|.
             cal_scores = []
             for i in range(len(idx2)):
                 for s in range(t + 1):
-                    y_true = float(Y_cal_sel[i, s, 0])
-                    y_pred = sel_model.predict(X_cal_sel[i, s, :],
-                                               S_cal_sel[i, :])
+                    y_prev = float(Y_cal_sel[i, s, 0])
+                    x_prev = X_cal_sel[i, s, :]
+                    s_i    = S_cal_sel[i, :]
+                    y_true = float(Y_cal_sel[i, s + 1, 0])
+                    y_pred = sel_model.predict(y_prev, x_prev, s_i)
                     cal_scores.append(abs(y_true - y_pred))
             predictor._scores  = np.array(cal_scores, dtype=float)
             predictor._weights = np.ones(len(cal_scores), dtype=float)
@@ -560,11 +589,13 @@ def _select_gamma(Y_train, X_train, S_train, cov_names, static_names,
             alpha_used = alpha_series.copy()
             alpha_next = alpha_series.copy()
             step_cov = []
+            # Evaluation: predict NaCl_{t+1} using inputs at time t.
             for i in range(n_eval):
-                x_t    = X_eval[i, t, :]
+                y_prev = float(Y_eval[i, t, 0])
+                x_prev = X_eval[i, t, :]
                 s_i    = S_eval[i, :]
-                y_true = float(Y_eval[i, t, 0])
-                y_pred = sel_model.predict(x_t, s_i)
+                y_true = float(Y_eval[i, t + 1, 0])
+                y_pred = sel_model.predict(y_prev, x_prev, s_i)
                 a = float(np.clip(alpha_used[i], 1e-6, 1 - 1e-6))
                 q = predictor._weighted_quantile(
                     predictor._scores, predictor._weights, 1.0 - a)
@@ -724,11 +755,16 @@ def run_medical_experiment(data, cal_frac=0.5, alpha=0.1, seed=42,
         predictor.noise_std = linear_model.noise_std
 
         # -- Build calibration scores -------------------------------------
+        # Pairs s = 0..t per patient: predict NaCl_{s+1} from
+        # (NaCl_s, X_s, S); accumulate absolute residual scores.
         cal_scores = []
         for i in range(n_cal):
-            for s in range(t + 2):
-                y_true = float(Y_cal[i, s, 0])
-                y_pred = linear_model.predict(X_cal[i, s, :], S_cal[i, :])
+            for s in range(t + 1):
+                y_prev = float(Y_cal[i, s, 0])
+                x_prev = X_cal[i, s, :]
+                s_i    = S_cal[i, :]
+                y_true = float(Y_cal[i, s + 1, 0])
+                y_pred = linear_model.predict(y_prev, x_prev, s_i)
                 cal_scores.append(abs(y_true - y_pred))
         cal_scores_arr = np.array(cal_scores, dtype=float)
 
@@ -738,7 +774,7 @@ def run_medical_experiment(data, cal_frac=0.5, alpha=0.1, seed=42,
         predictor._q       = None
 
         # -- Gamma selection every 5 steps --------------------------------
-        if t > 0 and (t % 5 == 0):
+        if t > 0 and (t % 10 == 0):
             sel_seed = seed + 10000 + t
             gamma_opt, gamma_scores = _select_gamma(
                 Y_train=Y_train, X_train=X_train, S_train=S_train,
@@ -813,8 +849,11 @@ def run_medical_experiment(data, cal_frac=0.5, alpha=0.1, seed=42,
                     _print_feature_diagnostic(predictor, cal_feat, t)
                     _print_classifier_diagnostic(predictor, cal_feat, t)
 
-                # Tile per-series weights to per-score weights
-                n_steps = t + 2
+                # Tile per-series weights to per-score weights.
+                # Each cal patient contributes (t+1) score entries (one per
+                # lagged pair s -> s+1, for s = 0..t), so each weight is
+                # repeated (t+1) times.
+                n_steps = t + 1
                 assert len(per_series_w) == n_cal, (
                     f"per_series_w length {len(per_series_w)} != n_cal {n_cal}"
                 )
@@ -833,11 +872,13 @@ def run_medical_experiment(data, cal_frac=0.5, alpha=0.1, seed=42,
                     label = "half1-ctx" if pred_idx is half1 else "half2-ctx"
                     _print_weight_diagnostic(per_series_w, t, label=label)
 
+                # Predict NaCl_{t+1} using inputs at time t only.
                 for i in pred_idx:
-                    x_t    = X_test[i, t+1, :]
+                    y_prev = float(Y_test[i, t, 0])
+                    x_prev = X_test[i, t, :]
                     s_i    = S_test[i, :]
-                    y_true = float(Y_test[i, t+1, 0])
-                    y_pred = linear_model.predict(x_t, s_i)
+                    y_true = float(Y_test[i, t + 1, 0])
+                    y_pred = linear_model.predict(y_prev, x_prev, s_i)
                     a = float(np.clip(alpha_used[i], 1e-6, 1 - 1e-6))
                     q = predictor._weighted_quantile(
                         predictor._scores, predictor._weights, 1.0 - a)
@@ -862,10 +903,11 @@ def run_medical_experiment(data, cal_frac=0.5, alpha=0.1, seed=42,
             width_t    = []
 
             for i in range(n_test):
-                x_t    = X_test[i, t+1, :]
+                y_prev = float(Y_test[i, t, 0])
+                x_prev = X_test[i, t, :]
                 s_i    = S_test[i, :]
-                y_true = float(Y_test[i, t+1, 0])
-                y_pred = linear_model.predict(x_t, s_i)
+                y_true = float(Y_test[i, t + 1, 0])
+                y_pred = linear_model.predict(y_prev, x_prev, s_i)
                 a = float(np.clip(alpha_used[i], 1e-6, 1 - 1e-6))
                 q = predictor._weighted_quantile(
                     predictor._scores, predictor._weights, 1.0 - a)
@@ -873,7 +915,7 @@ def run_medical_experiment(data, cal_frac=0.5, alpha=0.1, seed=42,
                 covered = int(lo <= y_true <= hi)
                 covered_t.append(covered)
                 width_t.append(hi - lo)
-                if i == 1:
+                if i == 0:
                     first_true.append(y_true)
                     first_lower.append(lo)
                     first_upper.append(hi)
