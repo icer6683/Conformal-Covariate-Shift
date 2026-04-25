@@ -142,6 +142,7 @@ def run_time_based_coverage_experiment(
     n_cal: int,
     aci_stepsize: float,
     use_lr: bool = True,
+    weight_mode: str = "estimated",
 ):
     """
     Run a time-based coverage experiment: evaluate coverage at each time step t.
@@ -194,8 +195,10 @@ def run_time_based_coverage_experiment(
     # Generate calibration data (NO SHIFT)
     # -----------------------
     print("Generating calibration data...")
+    cal_X = None        # static mode: per-series Poisson value, shape (n_cal,)
+    cal_X_paths = None  # dynamic mode: full X paths, shape (n_cal, T+1)
     if mode == "static":
-        cal_Y, _ = generator.generate_with_poisson_covariate(
+        cal_Y, cal_X = generator.generate_with_poisson_covariate(
             n=n_cal,
             ar_coef=ar_coef,
             beta=beta,
@@ -206,7 +209,7 @@ def run_time_based_coverage_experiment(
             trend_coef=trend_coef,
         )
     else:
-        cal_Y, _ = generator.generate_with_dynamic_covariate(
+        cal_Y, cal_X_paths = generator.generate_with_dynamic_covariate(
             n=n_cal,
             ar_coef=ar_coef,
             beta=beta,
@@ -230,19 +233,72 @@ def run_time_based_coverage_experiment(
             _make_synth_featurizer(_SYNTH_Y_WINDOW), predictor
         )
 
-    # -----------------------
-    # Generate test data
-    # -----------------------
-    print("Generating test data...")
-    
-    # Resolve shift params defaults for dynamic mode
+    # Configure oracle Poisson weighting if requested (static-X only).
+    # Source = calibration draw rate; target = test draw rate.
+    use_oracle = (
+        predictor_type == "algorithm"
+        and weight_mode == "oracle_poisson"
+        and with_shift
+        and mode == "static"
+        and cal_X is not None
+    )
+    if use_oracle:
+        predictor.weight_mode = "oracle_poisson"
+        predictor.lambda_source = float(covar_rate)
+        predictor.lambda_target = float(covar_rate_shift)
+        print(f"[oracle] Poisson LR weights enabled "
+              f"(λ_src={covar_rate}, λ_tgt={covar_rate_shift})")
+    elif weight_mode == "oracle_poisson" and predictor_type == "algorithm":
+        print(f"[oracle] requested but conditions not met "
+              f"(mode={mode}, with_shift={with_shift}); falling back to estimated weights")
+
+    # Resolve shift params defaults for dynamic mode (used by both the test
+    # data generator below and the oracle_dynamic predictor configuration).
     xr_s = x_rate if x_rate_shift is None else x_rate_shift
     xt_s = x_trend if x_trend_shift is None else x_trend_shift
     xn_s = x_noise_std if x_noise_std_shift is None else x_noise_std_shift
     xl_s = x0_lambda if x0_lambda_shift is None else x0_lambda_shift
 
+    # Configure oracle dynamic-X weighting if requested. (test_X_paths is
+    # populated post-test-loop, but cal_X_paths existence is sufficient to
+    # gate this — same mode/shift conditions guarantee test_X_paths is built.)
+    use_oracle_dyn = (
+        predictor_type == "algorithm"
+        and weight_mode == "oracle_dynamic"
+        and with_shift
+        and mode == "dynamic"
+        and cal_X_paths is not None
+    )
+    if use_oracle_dyn:
+        predictor.weight_mode = "oracle_dynamic"
+        predictor.dynamic_source_params = {
+            "x_rate":      float(x_rate),
+            "x_trend":     float(x_trend),
+            "x_noise_std": float(x_noise_std),
+            "x0_lambda":   float(x0_lambda),
+        }
+        predictor.dynamic_target_params = {
+            "x_rate_shift":      float(xr_s),
+            "x_trend_shift":     float(xt_s),
+            "x_noise_std_shift": float(xn_s),
+            "x0_lambda_shift":   float(xl_s),
+        }
+        print(f"[oracle] Dynamic-X prefix LR weights enabled "
+              f"(ρ:{x_rate}→{xr_s}, σ:{x_noise_std}→{xn_s}, "
+              f"λ_X0:{x0_lambda}→{xl_s})")
+    elif weight_mode == "oracle_dynamic" and predictor_type == "algorithm":
+        print(f"[oracle_dynamic] requested but conditions not met "
+              f"(mode={mode}, with_shift={with_shift}); falling back to estimated weights")
+
+    # -----------------------
+    # Generate test data
+    # -----------------------
+    print("Generating test data...")
+
     test_series_list = []
-    
+    test_X_list = []        # static mode: per-series scalar (post-shift)
+    test_X_paths_list = []  # dynamic mode: per-series full X path (post-shift)
+
     for i in range(n_series):
         if (i + 1) % 100 == 0:
             print(f"  Generated {i + 1}/{n_series} test series...")
@@ -277,7 +333,7 @@ def run_time_based_coverage_experiment(
         # Optionally apply TEST covariate shift via unified function
         if with_shift:
             if mode == "static":
-                Y_shift, _ = generator.introduce_covariate_shift(
+                Y_shift, X_shift = generator.introduce_covariate_shift(
                     original_Y=Y_orig,
                     original_X=X_orig,  # shape (1,)
                     covariate_mode="static",
@@ -289,8 +345,10 @@ def run_time_based_coverage_experiment(
                     },
                     shift_params={"shift_rate": covar_rate_shift if covar_rate_shift is not None else 3.0},
                 )
+                # Static-X shift returns (1, T+1) with the same value tiled.
+                test_X_list.append(float(np.asarray(X_shift).reshape(-1)[0]))
             else:
-                Y_shift, _ = generator.introduce_covariate_shift(
+                Y_shift, X_shift_dyn = generator.introduce_covariate_shift(
                     original_Y=Y_orig,
                     original_X=X_orig,  # shape (1, T+1)
                     covariate_mode="dynamic",
@@ -308,14 +366,24 @@ def run_time_based_coverage_experiment(
                         "x0_redraw": True,  # per spec
                     },
                 )
+                # Dynamic-X shift returns (1, T+1) full path.
+                test_X_paths_list.append(np.asarray(X_shift_dyn).reshape(-1))
             test_series = Y_shift[0]  # (T+1, 1)
         else:
             test_series = Y_orig[0]   # (T+1, 1)
-        
+            if mode == "static":
+                # No shift — record the original Poisson draw for completeness.
+                test_X_list.append(float(np.asarray(X_orig).reshape(-1)[0]))
+            else:
+                test_X_paths_list.append(np.asarray(X_orig).reshape(-1))
+
         test_series_list.append(test_series)
 
     # Convert to numpy array
     test_data = np.array(test_series_list)  # Shape: (n_series, T+1, 1)
+    test_X = np.asarray(test_X_list, dtype=float) if test_X_list else None
+    test_X_paths = (np.asarray(test_X_paths_list, dtype=float)
+                    if test_X_paths_list else None)
     
     # ALWAYS USE THE FIRST TEST SERIES
     example_idx = 15  # Always use the first series
@@ -373,9 +441,12 @@ def run_time_based_coverage_experiment(
             results_by_time['example_alpha_levels'].append(float(alpha_used[example_idx]))
 
         # -------------------------------------------------
-        # Gamma selection: every 10 steps, pick best gamma on a 3-way split of training data
+        # Gamma selection: every 10 steps, pick best gamma on a 3-way split of
+        # training data. Only runs when ACI is enabled (aci_stepsize > 0) —
+        # passing aci_stepsize=0 means "no ACI" and γ stays at 0 throughout.
         # -------------------------------------------------
-        if predictor_type == "algorithm" and t > 0 and (t % 10 == 0):
+        if (predictor_type == "algorithm" and t > 0 and (t % 10 == 0)
+                and float(aci_stepsize) > 0):
             sel_seed = int(getattr(generator, 'seed', 0)) + 10000 + t
             gamma_opt, _gamma_scores = _select_gamma_simple_aci(
                 train_Y=train_Y,
@@ -396,7 +467,79 @@ def run_time_based_coverage_experiment(
         # Use increasing amount of data as time progresses
         predictor.fit_ar_model(train_Y[:, :t+2, :])
 
-        if predictor_type == "algorithm" and t >= 1 and use_lr:
+        if predictor_type == "algorithm" and t >= 1 and use_oracle_dyn:
+            # ─── Oracle dynamic-X prefix LR weighting ───
+            # Online-safe: predictor.calibrate consumes only the prefix x_{0:t}
+            # of cal_X_paths (length t+1). predict_with_interval_oracle_dynamic
+            # computes the matching prefix LR for the test point and includes
+            # it in the normalization denominator.
+            predictor._is_shifted_ctx = True
+            predictor._t_ctx = t
+            predictor.calibrate(cal_Y[:, :t+2, :], cal_X=cal_X_paths)
+
+            for i in range(n_test):
+                series = test_data[i]
+                input_series = series[:t+1]
+                true_value = series[t+1, 0]
+
+                pred, lower, upper = predictor.predict_with_interval_oracle_dynamic(
+                    input_series,
+                    test_x_path=test_X_paths[i],
+                    alpha_level=alpha_used[i],
+                )
+
+                covered = (lower <= true_value <= upper)
+                err = 0 if covered else 1
+                alpha_next[i] = alpha_used[i] + gamma_opt * (base_alpha - err)
+                coverage_results.append(covered)
+                predictions.append(pred)
+                intervals.append([lower, upper])
+
+                if i == example_idx:
+                    results_by_time['example_predictions'].append(pred)
+                    results_by_time['example_lower_bounds'].append(lower)
+                    results_by_time['example_upper_bounds'].append(upper)
+                    results_by_time['example_true_values'].append(true_value)
+
+            alpha_series = np.clip(alpha_next, 1e-6, 1.0 - 1e-6)
+
+        elif predictor_type == "algorithm" and t >= 1 and use_oracle:
+            # ─── Oracle Poisson LR weighting (static-X) ───
+            # Weights depend only on cal_X / test_X and the known Poisson rates,
+            # so the cross-half classifier split is unnecessary. We calibrate
+            # once and form a per-test-point quantile that includes the test
+            # point's own LR weight in the normalization (Tibshirani 2019).
+            predictor._is_shifted_ctx = True
+            predictor._t_ctx = t
+            predictor.calibrate(cal_Y[:, :t+2, :], cal_X=cal_X)
+
+            for i in range(n_test):
+                series = test_data[i]
+                input_series = series[:t+1]
+                true_value = series[t+1, 0]
+
+                pred, lower, upper = predictor.predict_with_interval_oracle(
+                    input_series,
+                    test_x=float(test_X[i]),
+                    alpha_level=alpha_used[i],
+                )
+
+                covered = (lower <= true_value <= upper)
+                err = 0 if covered else 1
+                alpha_next[i] = alpha_used[i] + gamma_opt * (base_alpha - err)
+                coverage_results.append(covered)
+                predictions.append(pred)
+                intervals.append([lower, upper])
+
+                if i == example_idx:
+                    results_by_time['example_predictions'].append(pred)
+                    results_by_time['example_lower_bounds'].append(lower)
+                    results_by_time['example_upper_bounds'].append(upper)
+                    results_by_time['example_true_values'].append(true_value)
+
+            alpha_series = np.clip(alpha_next, 1e-6, 1.0 - 1e-6)
+
+        elif predictor_type == "algorithm" and t >= 1 and use_lr:
             # Split test set into two halves. First half uses second half as "shifted" positives, and vice versa.
             mid = n_test // 2
             idx_half1 = np.arange(0, mid)
@@ -517,7 +660,11 @@ def run_time_based_coverage_experiment(
             ,
             'alpha_mean': float(np.mean(alpha_used)) if alpha_used is not None else None,
             'alpha_std': float(np.std(alpha_used)) if alpha_used is not None else None,
-            'gamma_opt': float(gamma_opt) if predictor_type == "algorithm" else None
+            'gamma_opt': float(gamma_opt) if predictor_type == "algorithm" else None,
+            'ess': (float(getattr(predictor, '_last_ess', None))
+                    if predictor_type == "algorithm"
+                       and getattr(predictor, '_last_ess', None) is not None
+                    else None),
         }
 
         print(f"    Time {t+1}: Coverage = {np.mean(coverage_results):.1%}, "
@@ -797,6 +944,14 @@ def main():
                         help='Use time-invariant X (static) or time-varying X_t (dynamic)')
     parser.add_argument('--with_shift', action='store_true',
                         help='Apply covariate shift on the TEST set')
+    parser.add_argument('--weight_mode',
+                        choices=['estimated', 'oracle_poisson',
+                                 'oracle_dynamic', 'uniform'],
+                        default='estimated',
+                        help='LR weighting mode for the algorithm predictor. '
+                             '"oracle_poisson" → static-X closed-form Poisson '
+                             'LR. "oracle_dynamic" → dynamic-X closed-form '
+                             'AR(1) Gaussian prefix LR.')
 
     # Static-X params (generation + shift)
     parser.add_argument('--covar_rate', type=float, default=1.0, help='Poisson rate for X (static mode)')
@@ -906,6 +1061,7 @@ def main():
         n_train=args.n_train,
         n_cal=args.n_cal,
         aci_stepsize=args.aci_stepsize,
+        weight_mode=args.weight_mode,
     )
 
     # Compute overall statistics

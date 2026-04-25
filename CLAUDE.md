@@ -211,8 +211,21 @@ All S&P 500 data files are in `finance/data/`. Pass as `finance/data/sp500_DATES
 | `results/synthetic/json/results_algorithm_noshift_20260414_103748.json` | C2: AdaptedCAFHT (uniform+ACI), no shift | 0.8974 | 1.287 |
 | `results/synthetic/json/results_adaptive_shift_20260414_103752.json` | C3: Sliding-window, shift | 0.8969 | 1.290 |
 | `results/synthetic/json/results_adaptive_noshift_20260414_103751.json` | C4: Sliding-window, no shift | 0.8999 | 1.290 |
+| `results/synthetic/json/results_algorithm_staticshift_oracleLRandACI_20260425_155809.json` | **Oracle Poisson LR + ACI**, shift (test-inclusive normalization) | **0.8900** | 1.326 |
+| `results/synthetic/json/results_algorithm_staticshift_oracleLRonly_20260425_155757.json` | **Oracle Poisson LR only, γ=0**, shift | **0.8899** | 1.319 |
 
-Config: n_train=600, n_cal=600, n_series=300, T=20, n_seeds=30. C5/C6 (dynamic-X) not yet run.
+Config for C1–C4 + Oracle: n_train=600, n_cal=600, n_series=300, T=20, n_seeds=30. C5/C6 (dynamic-X) not yet run. Oracle runs use the closed-form Poisson LR P_test/P_cal with `λ_src=1, λ_tgt=2` and the test-point-inclusive normalization (Tibshirani 2019 weighted exchangeability). ESS ≈ 240/600 in steady state.
+
+### Synthetic LR-only ablation (D1, n_seeds=30, T=40, n_series=500) — strict γ=0
+Re-run on 2026-04-25 after a gate fix in [test_conformal.py:407](synthetic/test_conformal.py#L407): `aci_stepsize=0.0` now strictly disables the auto-γ selector (previously it kicked in at t≥10 from grid {0.001, 0.005, 0.01, 0.05, 0.1}, silently turning ACI on).
+
+| File | Condition | Coverage | Mean width | Δ vs old |
+|---|---|---|---|---|
+| `results/synthetic/json/results_algorithm_staticshift_LRonly_20260425_161407.json` | static-X shift, LR only γ=0 | 0.8941 | **1.035** | width −31% |
+| `results/synthetic/json/results_algorithm_dynamicshift_LRonly_20260425_161408.json` | dynamic-X shift, LR only γ=0 | 0.8358 | **1.161** | width −13% |
+| `results/synthetic/json/results_algorithm_noshift_LRonly_20260425_161402.json` | no shift, LR only γ=0 | 0.8990 | **1.048** | width −25% |
+
+Old auto-γ versions kept for provenance: `*_LRonly_20260424_18*.json`. Finance LR-only files (`gamma_grid=[0.0]`) and `medical_multi10_lr_only.json` were already strict γ=0 — no re-run needed.
 
 ### Finance (all 13 windows, seed=42)
 | Pattern | Condition | Coverage (mean±std/13w) | Width (mean) |
@@ -263,6 +276,9 @@ Key observations:
 - ✅ C2: AdaptedCAFHT, static-X, no shift (30 seeds)
 - ✅ C3: Sliding-window, static-X, with shift (30 seeds)
 - ✅ C4: Sliding-window, static-X, no shift (30 seeds)
+- ✅ D1: AdaptedCAFHT LR only γ=0 strict (static, dynamic, noshift; 30 seeds, 2026-04-25)
+- ✅ Oracle Poisson LR + ACI, static-X shift (30 seeds; new)
+- ✅ Oracle Poisson LR only γ=0, static-X shift (30 seeds; new)
 - ☐ C5: AdaptedCAFHT, dynamic-X, with shift (x_rate=0.6, x_rate_shift=0.9)
 - ☐ C6: AdaptedCAFHT, dynamic-X, no shift (x_rate=0.6)
 
@@ -278,8 +294,7 @@ Key observations:
 
 ### Must-have
 1. **Dynamic-X simulation** — run C5/C6 (not yet run).
-2. **Synthetic LR-only ablation (D1)** — run `multi_seed_experiments.py --aci_stepsize 0.0 --with_shift` to isolate LR contribution in synthetic setting.
-   Command: `python synthetic/multi_seed_experiments.py --predictor algorithm --covariate_mode static --with_shift --aci_stepsize 0.0 --n_seeds 30 --save_dir results/synthetic`
+2. ~~**Synthetic LR-only ablation (D1)**~~ — done 2026-04-25 with strict γ=0 (see results table).
 3. **Covariate shift PDF figures for paper** — run `plot_covariate_shift.py` with `--save` for Technology and Utilities sectors.
 
 ### Deferred / lower priority

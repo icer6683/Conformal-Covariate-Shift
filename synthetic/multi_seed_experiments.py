@@ -120,6 +120,7 @@ class MultiSeedExperiment:
             n_cal=config['n_cal'],
             aci_stepsize=config['aci_stepsize'],
             use_lr=config['use_lr'],
+            weight_mode=config.get('weight_mode', 'estimated'),
         )
         
         return results_by_time
@@ -179,12 +180,16 @@ class MultiSeedExperiment:
             coverage_rates = []
             interval_widths = []
             all_coverage_binary = []
-            
+            ess_values = []
+
             for seed, results in self.results_by_seed.items():
                 if t in results:
                     coverage_rates.append(results[t]['coverage_rate'])
                     interval_widths.append(results[t]['interval_width'])
                     all_coverage_binary.extend(results[t]['coverage_history'])
+                    ess = results[t].get('ess')
+                    if ess is not None:
+                        ess_values.append(float(ess))
             
             aggregated['by_time'][t] = {
                 'coverage_mean': np.mean(coverage_rates),
@@ -199,6 +204,8 @@ class MultiSeedExperiment:
                 'width_median': np.median(interval_widths),
                 'n_predictions_total': len(all_coverage_binary),
                 'empirical_coverage': np.mean(all_coverage_binary),  # Pooled coverage
+                'ess_mean': float(np.mean(ess_values)) if ess_values else None,
+                'ess_std':  float(np.std(ess_values))  if ess_values else None,
             }
         
         # Overall aggregated statistics (across all time steps and seeds)
@@ -493,6 +500,15 @@ def main():
     parser.add_argument('--use_lr', action='store_true',
                         help='Use LR weighting in the algorithm predictor. '
                              'When False, uniform weights are used (ACI only).')
+    parser.add_argument('--weight_mode',
+                        choices=['estimated', 'oracle_poisson',
+                                 'oracle_dynamic', 'uniform'],
+                        default='estimated',
+                        help='LR weighting mode (algorithm predictor). '
+                             '"oracle_poisson" → static-X closed-form Poisson; '
+                             '"oracle_dynamic" → dynamic-X closed-form AR(1) '
+                             'Gaussian prefix LR (online-safe). Both bypass '
+                             'the classifier and imply --use_lr.')
     
     # Static covariate parameters
     parser.add_argument('--covar_rate', type=float, default=1.0)
@@ -549,7 +565,8 @@ def main():
         'trend_coef': args.trend_coef,
         'covariate_mode': args.covariate_mode,
         'with_shift': args.with_shift,
-        'use_lr': args.use_lr,
+        'use_lr': args.use_lr or args.weight_mode in ('oracle_poisson', 'oracle_dynamic'),
+        'weight_mode': args.weight_mode,
         'covar_rate': args.covar_rate,
         'covar_rate_shift': args.covar_rate_shift,
         'x_rate': args.x_rate,
@@ -608,6 +625,10 @@ def main():
         algo_str = 'LRonly'          # LR weights, no ACI
     else:
         algo_str = 'LRandACI'        # full method (also covers use_lr=False + aci=0, degenerate)
+    if config.get('weight_mode') == 'oracle_poisson':
+        algo_str = 'oracle' + algo_str
+    elif config.get('weight_mode') == 'oracle_dynamic':
+        algo_str = 'oracleDyn' + algo_str
 
     # Save results
     results_file = json_dir / f"results_{pred_str}_{data_str}_{algo_str}_{timestamp}.json"
