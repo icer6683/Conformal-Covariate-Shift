@@ -12,6 +12,17 @@ Target coverage guarantee: P(Y^{n+1}_t ∈ Ĉ_t, ∀t ∈ [T]) ≥ 1 − α.
 
 ---
 
+## LaTeX paper folder — READ ONLY
+
+A LaTeX paper folder exists at `/Users/andrewlou/Downloads/LaTeX Paper` (listed in additional working directories).
+
+**Rules:**
+- **Do not edit, write, or modify any file in that folder.** No `Edit`, `Write`, or `NotebookEdit` calls inside it.
+- Reading is allowed (and encouraged when the user asks for paper-related context).
+- When the user asks for paper changes, **suggest edits piecemeal in chat** (quote the current text, propose the replacement) so the user can apply them manually.
+
+---
+
 ## Repository map
 
 **Run scripts are invoked from the project root with the `boa` conda env (Python 3.11).**
