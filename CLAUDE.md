@@ -42,9 +42,32 @@ Target coverage guarantee: P(Y^{n+1}_t ∈ Ĉ_t, ∀t ∈ [T]) ≥ 1 − α.
 ### Medical experiments (`medical/`)
 | File | Role |
 |---|---|
-| `medical/medical_conformal.py` | Sepsis ICU experiment using `AdaptedCAFHT` with linear covariate model + static covariates |
+| `medical/medical_conformal.py` | Sepsis ICU experiment using `AdaptedCAFHT` with linear covariate model + static covariates; `verbose` parameter suppresses per-step diagnostics for multi-seed use |
+| `medical/multi_seed_medical.py` | Multi-seed wrapper: subsamples n_traincal/n_test patients per seed from full pool; aggregates coverage + width; output schema matches synthetic multi-seed JSONs |
+| `medical/plot_medical_covariate_shift.py` | KDE + KL-divergence plot comparing TrainCal vs Test on HR, RR, O2Sat, NaCl, Age, gender, ethnicity |
 | `medical/medical_data.md` | Data dictionary for the sepsis pickle (cohort, imputation, split) |
 | `medical/sepsis_experiment_data_nacl_target.pkl` | Pre-extracted MIMIC-III sepsis pickle (9264 TrainCal + 5827 Test patients; split by Norepinephrine exposure in first 12 hours) |
+
+### Sector diagnostics (`finance/`)
+| File | Role |
+|---|---|
+| `finance/plot_sector_separability.py` | KS heatmap + violin plots across 7 sectors × 8 features; caches data to `_sector_diag_cache_*.npz`; produces JSON of KS statistics |
+
+### Run scripts (project root)
+| File | Role |
+|---|---|
+| `run_finance_experiments.sh` | Tech shift + noshift, 13 windows |
+| `run_new_finance_experiments.sh` | Tech LR-only (13 windows) + Healthcare shift/noshift (2 windows) |
+| `run_utilities_experiments.sh` | Utilities shift + noshift + LR-only, 13 windows, default γ-grid |
+| `run_utilities_g10_experiments.sh` | Utilities shift + noshift, 13 windows, expanded γ-grid {0.001,0.005,0.01,0.05,0.1} |
+
+### Audit outputs (`results/audit/`)
+| File | Role |
+|---|---|
+| `results/audit/build_master_table.py` | Regenerates all audit tables from saved JSONs |
+| `results/audit/master_results_table.{csv,md}` | All saved experiment rows (154 rows) |
+| `results/audit/finance_tech_aggregate.{csv,md}` | Per-window and aggregate tables for Tech + Utilities; g10 grid is primary for Utilities |
+| `results/audit/schema_inconsistencies.md` | Schema differences across JSON families |
 
 ### Data and results
 | Path | Role |
@@ -54,8 +77,8 @@ Target coverage guarantee: P(Y^{n+1}_t ∈ Ĉ_t, ∀t ∈ [T]) ≥ 1 − α.
 | `results/finance/pdf/` | Finance experiment PDF/PNG figures |
 | `results/synthetic/json/` | Synthetic experiment JSON outputs |
 | `results/synthetic/pdf/` | Synthetic experiment PNG figures |
-| `results/medical/json/` | Medical experiment JSON outputs (none yet) |
-| `results/medical/pdf/` | Medical experiment figures (none yet) |
+| `results/medical/json/` | Medical experiment JSON outputs |
+| `results/medical/pdf/` | Medical experiment figures |
 
 ---
 
@@ -120,22 +143,22 @@ When `--with_shift` is set, `_featurize_YX_summaries` replaces the default last-
 clipped to (1e-6, 1−1e-6). Applied per-series.
 
 ### Gamma selection
-Every 10 time steps, 3-way split of training data:
+Every 10 time steps (every 5 for medical), 3-way split of training data:
 - D_tr^(1): model fitting; D_tr^(2): calibration; D_tr^(3): evaluation
-- Γ = {0.001, 0.005, 0.01, 0.05, 0.1} in synthetic; {0.001, 0.005, 0.01, 0.05} in finance
+- Γ = {0.001, 0.005, 0.01, 0.05, 0.1} in synthetic; {0.001, 0.005, 0.01, 0.05} in finance/tech (default); {0.001, 0.005, 0.01, 0.05, 0.1} in utilities (g10 grid); [1e-6 … 0.01] (9 values) in medical
 - Simulate ACI on D_tr^(3) for each γ; pick γ with average coverage (second half of horizon) closest to 1−α
 
 ---
 
 ## Baselines
 
-| Name | Class | Key properties |
-|---|---|---|
-| Sliding-window split conformal | `OnlineConformalPredictor` | AR(1), fixed α, empirical quantile recomputed each step over a sliding window of residuals. **No ACI α_t update.** Used in saved `results_adaptive_*20260414*.json`. |
-| Weighted CAFHT without ACI (LR only) | `AdaptedCAFHT` with `aci_stepsize=0.0` | LR-weighted quantile, α held fixed. Ablation — not yet run. |
-| Weighted CAFHT without LR (ACI only) | `AdaptedCAFHT` with uniform weights on shifted test data | Per-series ACI α_t update with uniform calibration weights. Ablation — not yet run; the `with_shift=False` switch currently toggles *both* LR off *and* generates unshifted data, so a dedicated code path may be required. |
+| Name | Class | Key properties | Run status |
+|---|---|---|---|
+| Sliding-window split conformal | `OnlineConformalPredictor` | AR(1), fixed α, empirical quantile recomputed each step over sliding window. **No ACI α_t update.** | Run (synthetic C3/C4 multi-seed) |
+| Uniform + ACI (no shift) | `AdaptedCAFHT`, `with_shift=False` | Uniform calibration weights + per-series ACI. Standard conformal baseline on same model. | Run (all domains) |
+| LR only, γ=0 | `AdaptedCAFHT`, `with_shift=True`, `gamma_grid=[0.0]` | LR-weighted quantile, α held fixed (no ACI). Isolates LR contribution. | Run (finance tech/util 13 windows; medical 10 seeds) |
 
-Paper ablations are performed through `AdaptedCAFHT` parameter tweaks (flip `aci_stepsize=0.0` for LR-only, uniform weights for ACI-only), not through a separate baseline class. `OnlineConformalPredictor` is retained as a structurally different comparator but is not the primary baseline.
+Paper ablations are performed through `AdaptedCAFHT` parameter tweaks, not a separate class. `OnlineConformalPredictor` is retained as a structurally different synthetic comparator.
 
 ---
 
@@ -153,118 +176,99 @@ Paper ablations are performed through `AdaptedCAFHT` parameter tweaks (flip `aci
 
 ### Synthetic (algorithm predictor)
 - n_train=200, n_cal=200, n_test=500, T=20, α=0.1
-- Multi-seed: n_train=1000, n_cal=1000, n_test=500, T=40, N=100 seeds from seed 1000
+- Multi-seed (C1–C4 saved): n_train=600, n_cal=600, n_series=300, T=20, n_seeds=30, base_seed=1000
 
 ### Finance
 - α=0.1, cal_frac=0.5, seed=42, Y_window=30
-- gamma_grid=[0.001, 0.005, 0.01, 0.05]
+- gamma_grid=[0.001, 0.005, 0.01, 0.05] for Technology; [0.001, 0.005, 0.01, 0.05, 0.1] for Utilities (g10)
+
+### Medical
+- α=0.1, cal_frac=0.5, default seed=42; multi-seed uses base_seed=1000
+- n_traincal=1000, n_test=500 (subsampled from full pool each seed)
+- gamma_grid=[1e-6, 5e-6, 1e-5, 5e-5, 1e-4, 5e-4, 1e-3, 5e-3, 1e-2] (finer grid; gamma reselected every 5 steps)
 
 ---
 
-## Results currently available (updated 2026-04-23)
+## Results currently available (updated 2026-04-24)
 
 All S&P 500 data files are in `finance/data/`. Pass as `finance/data/sp500_DATES.npz` to all scripts.
 
 ### Synthetic multi-seed (static-X, n_seeds=30, T=20) — Group C1–C4 complete
-| File | Content |
-|---|---|
-| `results/synthetic/json/results_algorithm_shift_20260414_103750.json` + PNG | C1: AdaptedCAFHT, with shift |
-| `results/synthetic/json/results_algorithm_noshift_20260414_103748.json` + PNG | C2: AdaptedCAFHT, no shift |
-| `results/synthetic/json/results_adaptive_shift_20260414_103752.json` + PNG | C3: OnlineConformalPredictor, with shift |
-| `results/synthetic/json/results_adaptive_noshift_20260414_103751.json` + PNG | C4: OnlineConformalPredictor, no shift |
+| File | Condition | Coverage | Width |
+|---|---|---|---|
+| `results/synthetic/json/results_algorithm_shift_20260414_103750.json` | C1: AdaptedCAFHT (LR+ACI), shift | 0.8870 | 1.278 |
+| `results/synthetic/json/results_algorithm_noshift_20260414_103748.json` | C2: AdaptedCAFHT (uniform+ACI), no shift | 0.8974 | 1.287 |
+| `results/synthetic/json/results_adaptive_shift_20260414_103752.json` | C3: Sliding-window, shift | 0.8969 | 1.290 |
+| `results/synthetic/json/results_adaptive_noshift_20260414_103751.json` | C4: Sliding-window, no shift | 0.8999 | 1.290 |
 
-Additional older single-seed runs exist in `results/synthetic/json/` (dated 20260206, 20260210); superseded by the C1–C4 multi-seed files above. C5/C6 (dynamic-X) have not been run yet.
+Config: n_train=600, n_cal=600, n_series=300, T=20, n_seeds=30. C5/C6 (dynamic-X) not yet run.
 
-### Finance (all 13 windows complete, seed=42)
-| Pattern | Content |
-|---|---|
-| `results/finance/json/finance_tech_shift_DATES.json` + PDF | AdaptedCAFHT with LR weighting; Technology test sector; 13 windows |
-| `results/finance/json/finance_tech_noshift_DATES.json` + PDF | AdaptedCAFHT, no shift correction; Technology test sector; 13 windows |
-| `results/finance/json/finance_mixed_withweighting.json` + PDF | Mixed-sector test (null/no-shift baseline), with LR weighting; one window |
-| `results/finance/json/finance_mixed_noweighting.json` + PDF | Mixed-sector test (null/no-shift baseline), no weighting; one window |
-| `results/finance/json/finance_healthcare_shift.json` | Healthcare test, with LR weighting (pending E2 KL verification) |
-| `results/finance/pdf/covariate_shift.png` | Tech vs. non-Tech covariate KDE (motivating figure; PDF version pending E1) |
+### Finance (all 13 windows, seed=42)
+| Pattern | Condition | Coverage (mean±std/13w) | Width (mean) |
+|---|---|---|---|
+| `finance_tech_shift_DATES.json` ×13 | Tech: LR+ACI | 0.8876 ± 0.013 | 0.0505 |
+| `finance_tech_noshift_DATES.json` ×13 | Tech: uniform+ACI | 0.8803 ± 0.017 | 0.0493 |
+| `finance_tech_LRonly_DATES.json` ×13 | Tech: LR only, γ=0 | 0.8721 ± 0.018 | 0.0465 |
+| `finance_util_shift_g10_DATES.json` ×13 | Util: LR+ACI, g10 grid | 0.9233 ± 0.021 | 0.0451 |
+| `finance_util_noshift_g10_DATES.json` ×13 | Util: uniform+ACI, g10 grid | 0.9243 ± 0.020 | 0.0454 |
+| `finance_util_LRonly_DATES.json` ×13 | Util: LR only, γ=0 | 0.9316 ± 0.024 | 0.0447 |
+| `finance_mixed_withweighting.json` | Mixed null: LR+ACI, 1 window | 0.9121 | 0.0412 |
+| `finance_mixed_noweighting.json` | Mixed null: uniform+ACI, 1 window | 0.9106 | 0.0413 |
+| `finance_healthcare_shift_DATES.json` ×2 | Healthcare: LR+ACI, 2 windows (preliminary) | ~0.907 | ~0.063 |
+| `finance_healthcare_noshift_DATES.json` ×2 | Healthcare: uniform+ACI, 2 windows (preliminary) | ~0.907 | ~0.063 |
 
-Note: several files with a ` 2` suffix exist (e.g., `finance_tech_shift_20240201_20240328 2.json`) — artifact reruns that can be deleted.
+Sector separability (KS vs rest): Utilities max KS=0.75 (strong, driven by beta_spy); Technology max KS≈0.49; Healthcare max KS=0.42 (weak — LR classifier near-uniform weights for healthcare).
 
----
+### Medical (MIMIC-III sepsis, n_traincal=1000, n_test=500, 10 seeds)
+| File | Condition | Coverage (mean±std/seeds) | Width mean (mL/hr) |
+|---|---|---|---|
+| `results/medical/json/medical_ms_noshift.json` | uniform+ACI | 0.9766 ± 0.006 | 684 ± 57 |
+| `results/medical/json/medical_ms_shift.json` | LR+ACI | 0.9413 ± 0.007 | 420 ± 48 |
+| `results/medical/json/medical_ms_LRonly.json` | LR only, γ=0 | 0.9383 ± 0.006 | 420 ± 48 |
+| `results/medical/pdf/medical_covariate_shift.pdf` | KDE shift plot | NaCl KL=0.206, RR KL=0.022, O2Sat KL=0.050 | — |
 
-## Experiment plan (agreed 2026-04-22)
-
-### Finance experiments — run_finance_experiments.sh
-Run Tech shift + no-shift on 13 .npz windows (all except sp500_20231004_20240328.npz).
-Output naming: results/finance/{json,pdf}/finance_tech_{shift,noshift}_DATES.{json,pdf}
-
-NPZ files to use (all in finance/data/):
-  finance/data/sp500_20240102_20240229.npz
-  finance/data/sp500_20240201_20240328.npz
-  finance/data/sp500_20240301_20240430.npz
-  finance/data/sp500_20240401_20240531.npz
-  finance/data/sp500_20240501_20240628.npz
-  finance/data/sp500_20240603_20240731.npz
-  finance/data/sp500_20240701_20240830.npz
-  finance/data/sp500_20240801_20240930.npz
-  finance/data/sp500_20240903_20241031.npz
-  finance/data/sp500_20241001_20241129.npz
-  finance/data/sp500_20241101_20241231.npz
-  finance/data/sp500_20241202_20250131.npz
-  finance/data/sp500_20250102_20250228.npz
-Excluded: finance/data/sp500_20231004_20240328.npz (long overlapping window).
-
-Mixed-sector null baseline: finance/data/sp500_20240201_20240328.npz only (illustrative).
-  Outputs: results/finance/{json,pdf}/finance_mixed_{withweighting,noweighting}.{json,pdf}
-
-### Synthetic experiments — run_synthetic_experiments.sh (Group C)
-  C1: algorithm, static, with_shift     -> results/synthetic/{json,pdf}/
-  C2: algorithm, static, no shift       -> results/synthetic/{json,pdf}/
-  C3: adaptive, static, with_shift      -> results/synthetic/{json,pdf}/
-  C4: adaptive, static, no shift        -> results/synthetic/{json,pdf}/
-  C5: algorithm, dynamic, with_shift    (x_rate=0.6, x_rate_shift=0.9)
-  C6: algorithm, dynamic, no shift      (x_rate=0.6)
-All with --n_seeds 100, save JSON aggregation files.
+Note: LR weighting shifts coverage from +7.7pp (noshift) to +4.1pp above target; ACI contributes negligibly on top of LR (Δ=0.003).
 
 ---
 
-## TO-DO: deferred experiments (do not run yet)
+## Experiment plan — status (updated 2026-04-24)
 
-### Group D — Ablation
-D1: LR weighting without ACI (gamma=0).
-    Command: python synthetic/multi_seed_experiments.py --predictor algorithm
-             --covariate_mode static --with_shift --aci_stepsize 0.0
-             --n_seeds 100 --save_dir results/synthetic
-    Prerequisite: verify that aci_stepsize=0.0 is handled cleanly (alpha stays
-    fixed = alpha throughout; no division by zero).
-    Purpose: isolates contribution of LR weighting from ACI update.
+### Finance experiments — COMPLETE
+- ✅ Tech shift + noshift, 13 windows (`run_finance_experiments.sh`)
+- ✅ Tech LR-only (γ=0), 13 windows (`run_new_finance_experiments.sh`)
+- ✅ Utilities shift + noshift + LR-only, 13 windows, default grid (`run_utilities_experiments.sh`)
+- ✅ Utilities shift + noshift, 13 windows, g10 grid (`run_utilities_g10_experiments.sh`) — **primary**
+- ✅ Healthcare shift + noshift, 2 windows (`run_new_finance_experiments.sh`) — preliminary only
+- ✅ Mixed-sector null baseline, 1 window
 
-### Group E — Covariate shift verification figures
-E1: Technology vs. rest KDE + KL divergence
-    Command: python finance/plot_covariate_shift.py --npz finance/data/sp500_20240201_20240328.npz
-             --test_sector Technology --save results/finance/pdf/covariate_shift_tech.pdf
-E2: Healthcare vs. rest KDE + KL divergence
-    Command: python finance/plot_covariate_shift.py --npz finance/data/sp500_20240201_20240328.npz
-             --test_sector Healthcare --save results/finance/pdf/covariate_shift_healthcare.pdf
-    Note: run E2 and inspect KL values before including healthcare as a primary
-    shift experiment. If all four KL values are near zero, demote to robustness
-    condition only.
+### Synthetic experiments — Group C1–C4 COMPLETE; C5/C6 pending
+- ✅ C1: AdaptedCAFHT, static-X, with shift (30 seeds)
+- ✅ C2: AdaptedCAFHT, static-X, no shift (30 seeds)
+- ✅ C3: Sliding-window, static-X, with shift (30 seeds)
+- ✅ C4: Sliding-window, static-X, no shift (30 seeds)
+- ☐ C5: AdaptedCAFHT, dynamic-X, with shift (x_rate=0.6, x_rate_shift=0.9)
+- ☐ C6: AdaptedCAFHT, dynamic-X, no shift (x_rate=0.6)
+
+### Medical experiments — 10-seed runs COMPLETE
+- ✅ noshift (uniform+ACI), 10 seeds
+- ✅ shift (LR+ACI), 10 seeds
+- ✅ LR-only (γ=0), 10 seeds
+- ✅ Covariate shift KDE plot (TrainCal vs Test on HR/RR/O2Sat/NaCl/Age)
 
 ---
 
-## Gaps before experimental section is paper-ready
+## TO-DO: remaining gaps before paper is ready
 
 ### Must-have
-1. **Dynamic-X simulation results** — run C5/C6 above (not yet run).
-2. ~~**Finance results across all 13 windows**~~ — **DONE** (all 13 windows complete for tech shift/noshift; see `results/finance/`).
-3. ~~**Mixed-sector null baseline**~~ — **DONE** (`finance_mixed_withweighting.json` and `finance_mixed_noweighting.json` complete).
-4. ~~**JSON aggregation files for multi-seed synthetics**~~ — **DONE** (C1–C4 multi-seed JSON files present in `results/synthetic/json/`).
+1. **Dynamic-X simulation** — run C5/C6 (not yet run).
+2. **Synthetic LR-only ablation (D1)** — run `multi_seed_experiments.py --aci_stepsize 0.0 --with_shift` to isolate LR contribution in synthetic setting.
+   Command: `python synthetic/multi_seed_experiments.py --predictor algorithm --covariate_mode static --with_shift --aci_stepsize 0.0 --n_seeds 30 --save_dir results/synthetic`
+3. **Covariate shift PDF figures for paper** — run `plot_covariate_shift.py` with `--save` for Technology and Utilities sectors.
 
-### Deferred (Group D/E — see TO-DO above)
-5. **Ablation: LR weighting without ACI** — Group D1.
-6. **Healthcare covariate shift verification** — Group E2.
-7. **Vector figure output** — all figures should be saved as PDF not PNG.
-
-### Structural
-8. **Medical experiment (Section 5.3)** — data AND experiment script both exist and are fully implemented (see Medical Experiment Audit section below); no results have been run yet and no baseline (OnlineConformalPredictor) is wired up for this domain.
-9. **Theoretical proofs** — guarantee "has yet to be finalized" per technical note.
+### Deferred / lower priority
+4. Healthcare sector — KL too low for it to be a primary finance result; include only as robustness appendix.
+5. Vector figure output — save all figures as PDF not PNG for camera-ready.
+6. **Theoretical proofs** — guarantee "has yet to be finalized" per technical note.
 
 ---
 
@@ -287,9 +291,11 @@ Audit performed 2026-04-23. All claims below are source-verified.
 | `medical/medical_conformal.py` | Full experiment script: data loading, model, gamma selection, LR weighting, ACI loop, plotting, CLI | Implemented |
 | `medical/medical_data.md` | Data dictionary: cohort definition, imputation rules, patient dict structure, example usage | Implemented |
 | `medical/sepsis_experiment_data_nacl_target.pkl` | Pre-extracted MIMIC-III sepsis data (9264 TrainCal + 5827 Test patients, 24 hourly steps each; split by Norepinephrine use in first 12 hours) | Present |
-| `results/medical/` | No medical output files exist yet | Not run |
+| `results/medical/` | JSON + PDF results for 3 conditions × multi-seed (10 seeds) | Run |
+| `medical/multi_seed_medical.py` | Multi-seed wrapper: subsamples patients per seed, aggregates coverage/width, plots IQR bands | Implemented |
+| `medical/plot_medical_covariate_shift.py` | KDE + bar covariate shift diagnostic (Heart Rate, RR, O2Sat, NaCl, Age, gender, ethnicity); prints KL divergences | Implemented |
 
-No notebooks, no multi-seed wrapper, no baseline script, no covariate-shift diagnostic plot for the medical domain.
+No notebooks, no OnlineConformalPredictor baseline, no MIMIC-III extraction pipeline in repo.
 
 ---
 
@@ -377,15 +383,15 @@ No notebooks, no multi-seed wrapper, no baseline script, no covariate-shift diag
 - **Cal/train split**: cal_frac=0.5 → ~4300 train / ~4300 cal
 - **Time horizon**: T=23 steps
 - **Alpha**: 0.1 (default)
-- **Seeds**: single seed (default 42); no multi-seed wrapper exists
-- **Replications**: 1 (no multi-seed)
+- **Seeds**: single seed for exploratory runs (default 42); multi-seed wrapper `multi_seed_medical.py` runs 10 seeds (base_seed=1000) with independent patient subsampling
+- **Replications**: 10 seeds × 3 conditions (noshift, shift/LR+ACI, LRonly/γ=0) — all complete
 - **Metrics computed**:
   - `coverage_by_time`: empirical coverage fraction at each of 23 steps
   - `width_by_time`: mean prediction interval width at each step
   - `overall_coverage`: pooled fraction across all patients and all steps
   - `gamma_opt_history`: selected gamma at each step
   - `first_test_series`: true Y, lower, upper for the first test patient
-- **Output files**: `--save_plot` (PNG), `--save_json` (JSON); **no results files have been run yet**
+- **Output files**: `--save_plot` (PDF), `--save_json` (JSON); results in `results/medical/`
 
 ---
 
@@ -394,8 +400,18 @@ No notebooks, no multi-seed wrapper, no baseline script, no covariate-shift diag
 #### `plot_results` in `medical/medical_conformal.py:930`
 - **What it shows**: 4-panel figure — (1) coverage over time + target line, (2) mean interval width over time, (3) first test patient's actual NaCl vs. prediction interval, (4) selected ACI gamma over time (log scale)
 - **Created by**: `medical/medical_conformal.py:plot_results`; called from `main()` after `run_medical_experiment`
-- **Status**: **Not yet run** — no output files exist in `results/`
-- **Paper-readiness**: Preliminary. Output is PNG only (no PDF path). No comparison between shift/no-shift conditions on the same axes.
+- **Status**: Run and saved as PDF for all 3 conditions in `results/medical/pdf/`
+- **Paper-readiness**: Preliminary. Per-condition only — no single comparison figure with shift/no-shift on the same axes.
+
+#### `plot_aggregated` in `medical/multi_seed_medical.py`
+- **What it shows**: 6-panel figure — coverage+IQR, width±std, early/mid/late bar+errorbar, per-seed histogram, variability over time, summary text
+- **Status**: Run for all 3 multi-seed conditions
+- **Paper-readiness**: Preliminary; designed for diagnostics, not direct paper inclusion.
+
+#### `plot_medical_covariate_shift.py`
+- **What it shows**: 5-row KDE+bar layout: Heart Rate, RR, O2Sat, NaCl (full KDE each), Age/gender/ethnicity (row 5 split)
+- **KL divergences (Test ‖ TrainCal)**: Heart Rate=0.0009, RR=0.022, O2Sat=0.050, NaCl=0.206 (dominant), Age=0.014
+- **Status**: Run; output at `results/medical/pdf/medical_covariate_shift.pdf`
 
 ---
 
@@ -406,10 +422,9 @@ No notebooks, no multi-seed wrapper, no baseline script, no covariate-shift diag
 | Data pickle (`medical/sepsis_experiment_data_nacl_target.pkl`) | **Completed** | Present; 9264 TrainCal + 5827 Test patients (split by Norep in first 12 h); verified loadable |
 | Data dictionary (`medical/medical_data.md`) | **Completed** | Cohort, imputation, split, dict structure, usage examples |
 | Experiment script (`medical/medical_conformal.py`) | **Completed** | Full CLI, LR weighting, ACI, model, featurizer, gamma selection, plot |
-| Run results (any output JSON/PDF) | **Not implemented** | No files in `results/`; experiment has not been executed |
-| Baseline comparison (OnlineConformalPredictor on medical data) | **Not implemented** | finance_adaptive.py exists for finance; no equivalent for medical |
-| Multi-seed wrapper for medical | **Not implemented** | `multi_seed_experiments.py` wraps synthetic only |
-| Covariate shift diagnostic plot (KDE / KL) for Norepinephrine split | **Not implemented** | `plot_covariate_shift.py` is finance-only |
-| Ablation: LR weighting without ACI (γ=0) | **Not implemented** | Deferred (Group D); same gap as finance |
-| PDF figure output | **Not implemented** | `save_path` in `plot_results` accepts any extension but no PDF run exists |
+| Run results (JSON/PDF) for 3 conditions | **Completed** | `results/medical/json/medical_ms_{noshift,shift,LRonly}.json`; PDFs in `results/medical/pdf/` |
+| Multi-seed wrapper for medical | **Completed** | `medical/multi_seed_medical.py`; 10 seeds, base_seed=1000, n_traincal=1000, n_test=500 |
+| Covariate shift diagnostic plot (KDE / KL) | **Completed** | `medical/plot_medical_covariate_shift.py`; output `results/medical/pdf/medical_covariate_shift.pdf` |
+| Baseline comparison (OnlineConformalPredictor on medical data) | **Not implemented** | No equivalent of finance_adaptive.py for the medical domain |
+| Ablation: LR weighting without ACI (γ=0) as separate paper figure | **Partial** | LRonly multi-seed exists (`medical_ms_LRonly.json`); no side-by-side comparison figure |
 | MIMIC-III extraction pipeline (upstream of pkl) | **Not in repo** | Mentioned in `medical_conformal.py` docstring; code not present |

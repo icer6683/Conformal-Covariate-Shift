@@ -1,5 +1,9 @@
 {
   "permissions": {
+    "allow": [
+      "Bash(python3 -c ' *)",
+      "Bash(python3 -c \"import json; d=json.load\\(open\\('results/finance/json/finance_mixed_withweighting.json'\\)\\); print\\(json.dumps\\(d['config'], indent=2\\)\\)\")"
+    ],
     "additionalDirectories": [
       "/tmp"
     ]
