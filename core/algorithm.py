@@ -11,7 +11,8 @@ class AdaptedCAFHT:
     def __init__(self, alpha=0.1, logistic_kwargs=None,
                  weight_mode="estimated",
                  lambda_source=None, lambda_target=None,
-                 dynamic_source_params=None, dynamic_target_params=None):
+                 dynamic_source_params=None, dynamic_target_params=None,
+                 oracle_clip_factor=None):
         """
         weight_mode:
             "estimated"      — fit a logistic classifier on Y (and optionally X)
@@ -34,6 +35,9 @@ class AdaptedCAFHT:
         self.lambda_target = lambda_target
         self.dynamic_source_params = dynamic_source_params  # for oracle_dynamic
         self.dynamic_target_params = dynamic_target_params  # for oracle_dynamic
+        # Optional cap on cal weights at K × mean (mirrors the classifier-path
+        # clip in _compute_density_ratio_weights). None = no clip.
+        self.oracle_clip_factor = oracle_clip_factor
         self.ar_intercept = 0.0
         self.ar_coef = 0.0
         self.noise_std = 1.0
@@ -249,6 +253,8 @@ class AdaptedCAFHT:
         m = max(float(np.max(log_lr_cal)), log_lr_test)
         w_cal = np.exp(log_lr_cal - m)
         w_test = float(np.exp(log_lr_test - m))
+        # Optional cap at K × mean (matches estimated-LR classifier path).
+        w_cal = self._maybe_clip_at_mean(w_cal)
         D = float(np.sum(w_cal)) + w_test
         if not np.isfinite(D) or D <= 0:
             q = 2.0 * self.noise_std
@@ -325,6 +331,8 @@ class AdaptedCAFHT:
             return float(pred), float(pred - q), float(pred + q)
         w_cal = np.exp(log_lr_cal - m)
         w_test = float(np.exp(log_lr_test - m))
+        # Optional cap at K × mean (matches estimated-LR classifier path).
+        w_cal = self._maybe_clip_at_mean(w_cal)
         D = float(np.sum(w_cal)) + w_test
         if not np.isfinite(D) or D <= 0:
             q = 2.0 * self.noise_std
@@ -432,6 +440,20 @@ class AdaptedCAFHT:
         if not np.isfinite(s) or s <= 0:
             return np.ones_like(x)
         return w / s
+
+    def _maybe_clip_at_mean(self, w_cal):
+        """Cap unnormalized cal weights at K × their mean. Mirrors the
+        classifier-path clip in _compute_density_ratio_weights. No-op when
+        oracle_clip_factor is None or non-positive."""
+        if self.oracle_clip_factor is None:
+            return w_cal
+        K = float(self.oracle_clip_factor)
+        if not (K > 0 and np.isfinite(K)):
+            return w_cal
+        mean_w = float(np.mean(w_cal))
+        if not (mean_w > 0 and np.isfinite(mean_w)):
+            return w_cal
+        return np.minimum(w_cal, K * mean_w)
 
     @staticmethod
     def _oracle_dynamic_log_weights(X_paths, t_use, src, tgt):

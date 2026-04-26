@@ -143,6 +143,7 @@ def run_time_based_coverage_experiment(
     aci_stepsize: float,
     use_lr: bool = True,
     weight_mode: str = "estimated",
+    oracle_clip_factor: float | None = None,
 ):
     """
     Run a time-based coverage experiment: evaluate coverage at each time step t.
@@ -246,8 +247,11 @@ def run_time_based_coverage_experiment(
         predictor.weight_mode = "oracle_poisson"
         predictor.lambda_source = float(covar_rate)
         predictor.lambda_target = float(covar_rate_shift)
+        predictor.oracle_clip_factor = oracle_clip_factor
+        clip_str = (f", clip @ {oracle_clip_factor}× mean"
+                    if oracle_clip_factor else "")
         print(f"[oracle] Poisson LR weights enabled "
-              f"(λ_src={covar_rate}, λ_tgt={covar_rate_shift})")
+              f"(λ_src={covar_rate}, λ_tgt={covar_rate_shift}{clip_str})")
     elif weight_mode == "oracle_poisson" and predictor_type == "algorithm":
         print(f"[oracle] requested but conditions not met "
               f"(mode={mode}, with_shift={with_shift}); falling back to estimated weights")
@@ -283,9 +287,12 @@ def run_time_based_coverage_experiment(
             "x_noise_std_shift": float(xn_s),
             "x0_lambda_shift":   float(xl_s),
         }
+        predictor.oracle_clip_factor = oracle_clip_factor
+        clip_str = (f", clip @ {oracle_clip_factor}× mean"
+                    if oracle_clip_factor else "")
         print(f"[oracle] Dynamic-X prefix LR weights enabled "
               f"(ρ:{x_rate}→{xr_s}, σ:{x_noise_std}→{xn_s}, "
-              f"λ_X0:{x0_lambda}→{xl_s})")
+              f"λ_X0:{x0_lambda}→{xl_s}{clip_str})")
     elif weight_mode == "oracle_dynamic" and predictor_type == "algorithm":
         print(f"[oracle_dynamic] requested but conditions not met "
               f"(mode={mode}, with_shift={with_shift}); falling back to estimated weights")
@@ -952,6 +959,11 @@ def main():
                              '"oracle_poisson" → static-X closed-form Poisson '
                              'LR. "oracle_dynamic" → dynamic-X closed-form '
                              'AR(1) Gaussian prefix LR.')
+    parser.add_argument('--oracle_clip_factor', type=float, default=None,
+                        help='If set, cap unnormalized cal weights at K × '
+                             'their mean before normalization in oracle modes '
+                             '(matches the estimated-LR classifier-path clip; '
+                             'try 5.0).')
 
     # Static-X params (generation + shift)
     parser.add_argument('--covar_rate', type=float, default=1.0, help='Poisson rate for X (static mode)')
@@ -1062,6 +1074,7 @@ def main():
         n_cal=args.n_cal,
         aci_stepsize=args.aci_stepsize,
         weight_mode=args.weight_mode,
+        oracle_clip_factor=args.oracle_clip_factor,
     )
 
     # Compute overall statistics

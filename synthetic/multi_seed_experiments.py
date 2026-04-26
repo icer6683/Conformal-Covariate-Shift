@@ -121,6 +121,7 @@ class MultiSeedExperiment:
             aci_stepsize=config['aci_stepsize'],
             use_lr=config['use_lr'],
             weight_mode=config.get('weight_mode', 'estimated'),
+            oracle_clip_factor=config.get('oracle_clip_factor'),
         )
         
         return results_by_time
@@ -509,6 +510,10 @@ def main():
                              '"oracle_dynamic" → dynamic-X closed-form AR(1) '
                              'Gaussian prefix LR (online-safe). Both bypass '
                              'the classifier and imply --use_lr.')
+    parser.add_argument('--oracle_clip_factor', type=float, default=None,
+                        help='Cap unnormalized cal weights at K × mean before '
+                             'normalization in oracle modes (try 5.0 to mirror '
+                             'the estimated-LR classifier-path clip).')
     
     # Static covariate parameters
     parser.add_argument('--covar_rate', type=float, default=1.0)
@@ -567,6 +572,7 @@ def main():
         'with_shift': args.with_shift,
         'use_lr': args.use_lr or args.weight_mode in ('oracle_poisson', 'oracle_dynamic'),
         'weight_mode': args.weight_mode,
+        'oracle_clip_factor': args.oracle_clip_factor,
         'covar_rate': args.covar_rate,
         'covar_rate_shift': args.covar_rate_shift,
         'x_rate': args.x_rate,
@@ -629,6 +635,9 @@ def main():
         algo_str = 'oracle' + algo_str
     elif config.get('weight_mode') == 'oracle_dynamic':
         algo_str = 'oracleDyn' + algo_str
+    if config.get('oracle_clip_factor'):
+        clip_int = int(config['oracle_clip_factor']) if float(config['oracle_clip_factor']).is_integer() else config['oracle_clip_factor']
+        algo_str = f"{algo_str}_clip{clip_int}x"
 
     # Save results
     results_file = json_dir / f"results_{pred_str}_{data_str}_{algo_str}_{timestamp}.json"
