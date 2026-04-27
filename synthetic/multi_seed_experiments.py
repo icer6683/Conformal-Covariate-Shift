@@ -228,6 +228,22 @@ class MultiSeedExperiment:
             'width_std': np.std(all_overall_widths),
             'total_predictions': len(all_overall_coverage),
         }
+
+        per_seed_coverage = []
+        per_seed_width = []
+        for seed, results in self.results_by_seed.items():
+            seed_cov_binary = []
+            seed_widths = []
+            for t in time_steps:
+                if t in results:
+                    seed_cov_binary.extend(results[t]['coverage_history'])
+                    n_pred = results[t]['n_predictions']
+                    seed_widths.extend([results[t]['interval_width']] * n_pred)
+            if seed_cov_binary:
+                per_seed_coverage.append(float(np.mean(seed_cov_binary)))
+                per_seed_width.append(float(np.mean(seed_widths)))
+        aggregated['per_seed_coverage'] = per_seed_coverage
+        aggregated['per_seed_width'] = per_seed_width
         
         # Calculate time-based degradation statistics
         early_time_steps = time_steps[:len(time_steps)//3]

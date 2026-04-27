@@ -1,0 +1,19 @@
+\begin{table}[ht]
+\centering
+\small
+\setlength{\tabcolsep}{8pt}
+\renewcommand{\arraystretch}{1.15}
+\caption{%
+  Medical results (MIMIC-III sepsis cohort, NaCl 0.9\% dosage target, $\alpha=0.10$, target coverage $= 0.90$, $T = 23$, 10 seeds with $n_{\mathrm{traincal}} = 1{,}000$ and $n_{\mathrm{test}} = 500$ subsampled per seed). $\overline{|\Delta|}$: mean per-seed absolute deviation from $1-\alpha$. \textit{Width}: mean interval width in mL/hr.
+}
+\label{tab:medical}
+\begin{tabular}{@{} lrrr @{}}
+\toprule
+{\bfseries Algorithm}  & {\bfseries Coverage} & $\boldsymbol{\overline{|\Delta|}}$ & {\bfseries Width} \\
+\midrule
+Weighted CAFHT     & 0.897 & 0.010 & 211.6 \\
+Uniform weights    & 0.928 & 0.028 & 264.6 \\
+Zero $\gamma$      & 0.896 & 0.011 & 195.1 \\
+\bottomrule
+\end{tabular}
+\end{table}

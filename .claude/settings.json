@@ -3,7 +3,8 @@
     "allow": [
       "Bash(python3 -c ' *)",
       "Bash(python3 -c \"import json; d=json.load\\(open\\('results/finance/json/finance_mixed_withweighting.json'\\)\\); print\\(json.dumps\\(d['config'], indent=2\\)\\)\")",
-      "Bash(python -c ' *)"
+      "Bash(python -c ' *)",
+      "Bash(python3 build_tex_tables.py --sections finance medical)"
     ],
     "additionalDirectories": [
       "/tmp"

@@ -1,0 +1,36 @@
+\begin{table}[ht]
+\centering
+\small
+\setlength{\tabcolsep}{8pt}
+\renewcommand{\arraystretch}{1.15}
+\caption{%
+  Finance results (S\&P~500 intraday returns, $\alpha=0.10$, seed~42, target coverage $= 0.90$). Technology and Utilities: mean over 13 rolling windows. Mixed (null baseline): single window, 15\% random test draw. $\overline{|\Delta|}$: mean per-window absolute deviation from $1-\alpha$. \textit{Width}: mean interval width (intraday return units). Utilities uses $\gamma$-grid $\{0.001, 0.005, 0.01, 0.05, 0.1\}$; Technology uses $\{0.001, 0.005, 0.01, 0.05\}$.
+}
+\label{tab:finance}
+\begin{tabular}{@{} llrrr @{}}
+\toprule
+{\bfseries Sector} & {\bfseries Algorithm}  & {\bfseries Coverage} & $\boldsymbol{\overline{|\Delta|}}$ & {\bfseries Width} \\
+\midrule
+Technology
+  & Weighted CAFHT     & 0.888 & 0.017 & 0.0505 \\
+Technology
+  & Uniform weights    & 0.880 & 0.024 & 0.0493 \\
+Technology
+  & Zero $\gamma$      & 0.872 & 0.029 & 0.0465 \\
+\midrule
+Utilities
+  & Weighted CAFHT     & 0.923 & 0.025 & 0.0451 \\
+Utilities
+  & Uniform weights    & 0.924 & 0.026 & 0.0454 \\
+Utilities
+  & Zero $\gamma$      & 0.932 & 0.034 & 0.0447 \\
+\midrule
+Mixed (null)
+  & Weighted CAFHT     & 0.911 & 0.011 & 0.0414 \\
+Mixed (null)
+  & Uniform weights    & 0.911 & 0.011 & 0.0413 \\
+Mixed (null)
+  & Zero $\gamma$      & -- & -- & -- \\
+\bottomrule
+\end{tabular}
+\end{table}
