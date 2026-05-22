@@ -285,9 +285,12 @@ def _select_gamma(Y_train, X_train, cov_names, base_alpha, t_max, gamma_grid, se
             sel_model = LinearCovariateModel(cov_names)
             sel_model.fit(Y_fit_sel[:, :t+1, :], X_fit_sel[:, :t+1, :])
             predictor.noise_std = sel_model.noise_std
+            # Algorithm spec: at outer step t the calibration set is the
+            # n_cal residuals at the single same step as the eval below,
+            # not a pooled set across times.
             cal_scores = [
-                abs(float(Y_cal_sel[i, s, 0]) - sel_model.predict(X_cal_sel[i, s, :]))
-                for i in range(len(idx2)) for s in range(t + 1)
+                abs(float(Y_cal_sel[i, t, 0]) - sel_model.predict(X_cal_sel[i, t, :]))
+                for i in range(len(idx2))
             ]
             predictor._scores  = np.array(cal_scores, dtype=float)
             predictor._weights = np.ones(len(cal_scores), dtype=float)
@@ -432,12 +435,14 @@ def run_finance_experiment(result, test_sector, cal_frac=0.5, alpha=0.1, seed=42
         predictor.noise_std = linear_model.noise_std
 
         # ── build calibration scores ──────────────────────────────────────────
+        # Algorithm spec: at outer step t we calibrate only at the time
+        # we will predict for (t+1) — one score per cal ticker, not a
+        # pooled set across times s=0..t+1.
         cal_scores = []
         for i in range(n_cal):
-            for s in range(t + 2):
-                y_true = float(Y_cal[i, s, 0])
-                y_pred = linear_model.predict(X_cal[i, s, :])
-                cal_scores.append(abs(y_true - y_pred))
+            y_true = float(Y_cal[i, t+1, 0])
+            y_pred = linear_model.predict(X_cal[i, t+1, :])
+            cal_scores.append(abs(y_true - y_pred))
         cal_scores_arr = np.array(cal_scores, dtype=float)
 
         predictor._scores  = cal_scores_arr
@@ -506,15 +511,16 @@ def run_finance_experiment(result, test_sector, cal_frac=0.5, alpha=0.1, seed=42
                     _print_feature_diagnostic(predictor, cal_feat, t, feat_names)
                     _print_classifier_diagnostic(predictor, cal_feat, t)
 
-                n_steps = t + 2
+                # Each cal ticker contributes exactly one score
+                # (the single timestamp t+1), so the per-series LR
+                # weight applies one-to-one — no tiling needed.
                 assert len(per_series_w) == n_cal, (
                     f"per_series_w {len(per_series_w)} != n_cal {n_cal}")
-                tiled_w = np.repeat(per_series_w, n_steps)
-                assert len(tiled_w) == len(cal_scores_arr), (
-                    f"tiled_w {len(tiled_w)} != cal_scores {len(cal_scores_arr)}")
+                assert len(cal_scores_arr) == n_cal, (
+                    f"cal_scores {len(cal_scores_arr)} != n_cal {n_cal}")
 
                 predictor._scores  = cal_scores_arr
-                predictor._weights = tiled_w
+                predictor._weights = per_series_w
                 predictor._q       = None
 
                 if t == 1 or t % 10 == 0 or t == T - 1:

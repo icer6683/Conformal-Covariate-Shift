@@ -572,17 +572,17 @@ def _select_gamma(Y_train, X_train, S_train, cov_names, static_names,
             sel_model.fit(Y_fit_sel[:, :t+2, :], X_fit_sel[:, :t+2, :],
                           S_fit_sel)
             predictor.noise_std = sel_model.noise_std
-            # Calibration: pairs s=0..t -> predict NaCl_{s+1} from
-            # (NaCl_s, X_s, S); score = |NaCl_{s+1} - pred|.
+            # Calibration: a single pair per cal patient at the same
+            # step as the eval prediction below — predict NaCl_{t+1}
+            # from (NaCl_t, X_t, S); score = |NaCl_{t+1} - pred|.
             cal_scores = []
             for i in range(len(idx2)):
-                for s in range(t + 1):
-                    y_prev = float(Y_cal_sel[i, s, 0])
-                    x_prev = X_cal_sel[i, s, :]
-                    s_i    = S_cal_sel[i, :]
-                    y_true = float(Y_cal_sel[i, s + 1, 0])
-                    y_pred = sel_model.predict(y_prev, x_prev, s_i)
-                    cal_scores.append(abs(y_true - y_pred))
+                y_prev = float(Y_cal_sel[i, t, 0])
+                x_prev = X_cal_sel[i, t, :]
+                s_i    = S_cal_sel[i, :]
+                y_true = float(Y_cal_sel[i, t + 1, 0])
+                y_pred = sel_model.predict(y_prev, x_prev, s_i)
+                cal_scores.append(abs(y_true - y_pred))
             predictor._scores  = np.array(cal_scores, dtype=float)
             predictor._weights = np.ones(len(cal_scores), dtype=float)
             predictor._q       = None
@@ -755,17 +755,18 @@ def run_medical_experiment(data, cal_frac=0.5, alpha=0.1, seed=42,
         predictor.noise_std = linear_model.noise_std
 
         # -- Build calibration scores -------------------------------------
-        # Pairs s = 0..t per patient: predict NaCl_{s+1} from
-        # (NaCl_s, X_s, S); accumulate absolute residual scores.
+        # One score per cal patient at the same step as the test
+        # prediction below — predict NaCl_{t+1} from (NaCl_t, X_t, S);
+        # score = |NaCl_{t+1} - pred|. (Algorithm spec: calibrate only
+        # on time t+1 predicted / true pairs.)
         cal_scores = []
         for i in range(n_cal):
-            for s in range(t + 1):
-                y_prev = float(Y_cal[i, s, 0])
-                x_prev = X_cal[i, s, :]
-                s_i    = S_cal[i, :]
-                y_true = float(Y_cal[i, s + 1, 0])
-                y_pred = linear_model.predict(y_prev, x_prev, s_i)
-                cal_scores.append(abs(y_true - y_pred))
+            y_prev = float(Y_cal[i, t, 0])
+            x_prev = X_cal[i, t, :]
+            s_i    = S_cal[i, :]
+            y_true = float(Y_cal[i, t + 1, 0])
+            y_pred = linear_model.predict(y_prev, x_prev, s_i)
+            cal_scores.append(abs(y_true - y_pred))
         cal_scores_arr = np.array(cal_scores, dtype=float)
 
         # Default: uniform weights
@@ -849,22 +850,18 @@ def run_medical_experiment(data, cal_frac=0.5, alpha=0.1, seed=42,
                     _print_feature_diagnostic(predictor, cal_feat, t)
                     _print_classifier_diagnostic(predictor, cal_feat, t)
 
-                # Tile per-series weights to per-score weights.
-                # Each cal patient contributes (t+1) score entries (one per
-                # lagged pair s -> s+1, for s = 0..t), so each weight is
-                # repeated (t+1) times.
-                n_steps = t + 1
+                # Each cal patient contributes exactly one score
+                # (the pair t -> t+1), so the per-series LR weight
+                # applies one-to-one — no tiling needed.
                 assert len(per_series_w) == n_cal, (
                     f"per_series_w length {len(per_series_w)} != n_cal {n_cal}"
                 )
-                tiled_w = np.repeat(per_series_w, n_steps)
-                assert len(tiled_w) == len(cal_scores_arr), (
-                    f"tiled_w length {len(tiled_w)} != cal_scores "
-                    f"length {len(cal_scores_arr)}"
+                assert len(cal_scores_arr) == n_cal, (
+                    f"cal_scores length {len(cal_scores_arr)} != n_cal {n_cal}"
                 )
 
                 predictor._scores  = cal_scores_arr
-                predictor._weights = tiled_w
+                predictor._weights = per_series_w
                 predictor._q       = None
 
                 # Weight summary
