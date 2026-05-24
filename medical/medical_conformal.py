@@ -531,10 +531,23 @@ class LinearCovariateModel:
 
 # Select gamma by running simple ACI on a 3-way split of training data
 def _select_gamma(Y_train, X_train, S_train, cov_names, static_names,
-                  base_alpha, t_max, gamma_grid, seed=0):
+                  base_alpha, t_max, gamma_grid, seed=0,
+                  *, with_shift=False, Y_test=None, X_test=None, S_test=None,
+                  weight_predictor=None):
     """
-    Select gamma by running simple ACI on a 3-way split of training data up
-    to t_max.  Uses the linear covariate model (no LR weighting).
+    Select gamma by running ACI on a 3-way split of training data up to t_max.
+
+    When `with_shift=True` and (Y_test, X_test, S_test, weight_predictor) are
+    provided, the calibration step is weighted by the same train-vs-test
+    likelihood-ratio classifier the deployment loop fits. The classifier is fit
+    fresh at each inner step on full Y_train (class 0) vs full Y_test (class 1)
+    using `weight_predictor._featurize_prefixes` (the monkey-patched richer
+    featurizer); standardization stats are computed from the inner-step training
+    features so train/test/cal share the same scale. With single-point
+    calibration each cal patient contributes one score, so per-series weights
+    apply one-to-one.
+
+    When `with_shift=False`, calibration weights are uniform (legacy behavior).
     """
     n_train = Y_train.shape[0]
     if n_train < 9 or t_max < 2:
@@ -560,6 +573,47 @@ def _select_gamma(Y_train, X_train, S_train, cov_names, static_names,
     start_eval = max(0, horizon // 2)
     target    = 1.0 - base_alpha
 
+    use_lr_weights = bool(
+        with_shift and Y_test is not None and X_test is not None
+        and S_test is not None and weight_predictor is not None
+    )
+
+    def _weighted_cal_scores(t_inner):
+        """Per-cal-series LR weights at inner step t_inner; train/test
+        classifier fit on full Y_train vs full Y_test, evaluated on D_tr^(2).
+        Saves and restores weight_predictor's mutable feature state so the
+        outer deployment loop isn't disturbed."""
+        wp = weight_predictor
+        saved = {
+            "_X_ctx":   getattr(wp, "_X_ctx",   None),
+            "_S_ctx":   getattr(wp, "_S_ctx",   None),
+            "_feat_mu": getattr(wp, "_feat_mu", None),
+            "_feat_std":getattr(wp, "_feat_std",None),
+        }
+        try:
+            wp._X_ctx = X_train[:, :t_inner+1, :]
+            wp._S_ctx = S_train
+            wp._feat_mu = None
+            wp._feat_std = None
+            train_raw = wp._featurize_prefixes(Y_train[:, :t_inner+1, :])
+            wp._feat_mu  = train_raw.mean(axis=0, keepdims=True)
+            wp._feat_std = train_raw.std(axis=0, keepdims=True) + 1e-8
+            wp._X_ctx = X_train[:, :t_inner+1, :]
+            wp._S_ctx = S_train
+            train_feat = wp._featurize_prefixes(Y_train[:, :t_inner+1, :])
+            wp._X_ctx = X_test[:, :t_inner+1, :]
+            wp._S_ctx = S_test
+            test_feat  = wp._featurize_prefixes(Y_test[:, :t_inner+1, :])
+            wp._X_ctx = X_cal_sel[:, :t_inner+1, :]
+            wp._S_ctx = S_cal_sel
+            cal_feat   = wp._featurize_prefixes(Y_cal_sel[:, :t_inner+1, :])
+            per_series_w = wp._compute_density_ratio_weights(
+                trainX=train_feat, testX=test_feat, evalX=cal_feat)
+        finally:
+            for k, v in saved.items():
+                setattr(wp, k, v)
+        return per_series_w
+
     scores = {}
     for gamma in gamma_grid:
         gamma = float(gamma)
@@ -584,7 +638,10 @@ def _select_gamma(Y_train, X_train, S_train, cov_names, static_names,
                 y_pred = sel_model.predict(y_prev, x_prev, s_i)
                 cal_scores.append(abs(y_true - y_pred))
             predictor._scores  = np.array(cal_scores, dtype=float)
-            predictor._weights = np.ones(len(cal_scores), dtype=float)
+            if use_lr_weights and t >= 1:
+                predictor._weights = _weighted_cal_scores(t)
+            else:
+                predictor._weights = np.ones(len(cal_scores), dtype=float)
             predictor._q       = None
             alpha_used = alpha_series.copy()
             alpha_next = alpha_series.copy()
@@ -782,6 +839,8 @@ def run_medical_experiment(data, cal_frac=0.5, alpha=0.1, seed=42,
                 cov_names=cov_names, static_names=static_names,
                 base_alpha=alpha, t_max=t, gamma_grid=gamma_grid,
                 seed=sel_seed,
+                with_shift=with_shift, Y_test=Y_test, X_test=X_test,
+                S_test=S_test, weight_predictor=predictor,
             )
             scores_str = "  ".join(
                 f"gamma={g:.3f}->{v:.3f}" for g, v in gamma_scores.items()

@@ -258,7 +258,21 @@ class LinearCovariateModel:
 # =============================================================================
 # Gamma selection
 # =============================================================================
-def _select_gamma(Y_train, X_train, cov_names, base_alpha, t_max, gamma_grid, seed=0):
+def _select_gamma(Y_train, X_train, cov_names, base_alpha, t_max, gamma_grid, seed=0,
+                  *, with_shift=False, Y_test=None, X_test=None, weight_predictor=None):
+    """
+    Select gamma by simulating ACI on a 3-way split of training data.
+
+    When `with_shift=True` and (Y_test, X_test, weight_predictor) are provided,
+    the simulated calibration step uses likelihood-ratio weights computed by
+    fitting the same train-vs-test classifier the deployment loop uses
+    (full Y_train as class 0, full Y_test as class 1) and evaluating it on the
+    D_tr^(2) calibration sub-fold. With single-point calibration there is one
+    cal score per series, so per-series weights apply one-to-one.
+
+    When `with_shift=False`, calibration weights are uniform (legacy behavior;
+    byte-identical to the prior implementation).
+    """
     n_train = Y_train.shape[0]
     if n_train < 9 or t_max < 2:
         return float(gamma_grid[0]), {float(g): float('nan') for g in gamma_grid}
@@ -275,6 +289,10 @@ def _select_gamma(Y_train, X_train, cov_names, base_alpha, t_max, gamma_grid, se
     horizon   = min(t_max, Y_train.shape[1] - 1)
     start_eval = max(0, horizon // 2)
     target    = 1.0 - base_alpha
+    use_lr_weights = bool(
+        with_shift and Y_test is not None and X_test is not None
+        and weight_predictor is not None
+    )
     scores    = {}
     for gamma in gamma_grid:
         gamma        = float(gamma)
@@ -293,7 +311,18 @@ def _select_gamma(Y_train, X_train, cov_names, base_alpha, t_max, gamma_grid, se
                 for i in range(len(idx2))
             ]
             predictor._scores  = np.array(cal_scores, dtype=float)
-            predictor._weights = np.ones(len(cal_scores), dtype=float)
+            if use_lr_weights and t >= 1:
+                train_feat = weight_predictor._featurize_prefixes(
+                    Y_train[:, :t+1, :], X_train[:, :t+1, :])
+                test_feat  = weight_predictor._featurize_prefixes(
+                    Y_test[:, :t+1, :],  X_test[:, :t+1, :])
+                cal_feat   = weight_predictor._featurize_prefixes(
+                    Y_cal_sel[:, :t+1, :], X_cal_sel[:, :t+1, :])
+                per_series_w = weight_predictor._compute_density_ratio_weights(
+                    trainX=train_feat, testX=test_feat, evalX=cal_feat)
+                predictor._weights = per_series_w
+            else:
+                predictor._weights = np.ones(len(cal_scores), dtype=float)
             predictor._q       = None
             alpha_used = alpha_series.copy()
             alpha_next = alpha_series.copy()
@@ -455,6 +484,8 @@ def run_finance_experiment(result, test_sector, cal_frac=0.5, alpha=0.1, seed=42
             gamma_opt, gamma_scores = _select_gamma(
                 Y_train=Y_train, X_train=X_train, cov_names=cov_names,
                 base_alpha=alpha, t_max=t, gamma_grid=gamma_grid, seed=sel_seed,
+                with_shift=with_shift, Y_test=Y_test, X_test=X_test,
+                weight_predictor=predictor,
             )
             scores_str = "  ".join(
                 f"gamma={g:.3f}->{v:.3f}" for g, v in gamma_scores.items()

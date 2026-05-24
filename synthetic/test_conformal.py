@@ -461,6 +461,9 @@ def run_time_based_coverage_experiment(
                 t_max=t,
                 gamma_grid=GAMMA_GRID,
                 seed=sel_seed,
+                with_shift=with_shift and use_lr,
+                test_data=test_data,
+                weight_predictor=predictor,
             )
 
         if predictor_type == "algorithm":
@@ -682,14 +685,27 @@ def run_time_based_coverage_experiment(
 
 
 def _select_gamma_simple_aci(train_Y: np.ndarray, base_alpha: float, t_max: int,
-                            gamma_grid, seed: int = 0):
+                            gamma_grid, seed: int = 0,
+                            *, with_shift: bool = False,
+                            test_data: np.ndarray = None,
+                            weight_predictor=None):
     """
-    Select gamma by running simple ACI (no LR weighting) on a 3-way split of train_Y up to time t_max.
+    Select gamma by running ACI on a 3-way split of train_Y up to time t_max.
 
     Split:
       - D_tr^(1): fit AR model
       - D_tr^(2): calibration
       - D_tr^(3): evaluation
+
+    When `with_shift=True` and (test_data, weight_predictor) are provided, the
+    calibration scores from D_tr^(2) are weighted by the same train-vs-test
+    likelihood-ratio classifier the deployment loop fits. The classifier is fit
+    fresh at each inner step on full train_Y (class 0) vs full test_data
+    (class 1) using `weight_predictor._featurize_prefixes` (the monkey-patched
+    rolling-window featurizer); per-series weights on D_tr^(2) replace the
+    uniform weights `AdaptedCAFHT.calibrate` would otherwise use.
+
+    When `with_shift=False`, calibration weights are uniform (legacy behavior).
 
     Metric: average coverage over second half of the horizon (in time-index t space).
 
@@ -728,6 +744,10 @@ def _select_gamma_simple_aci(train_Y: np.ndarray, base_alpha: float, t_max: int,
     horizon = min(t_max, Tp1 - 2)  # t ranges 0..horizon
     start_eval = max(0, horizon // 2)  # second half (in t-index)
 
+    use_lr_weights = bool(
+        with_shift and test_data is not None and weight_predictor is not None
+    )
+
     scores = {}
     target = 1.0 - base_alpha
 
@@ -744,6 +764,16 @@ def _select_gamma_simple_aci(train_Y: np.ndarray, base_alpha: float, t_max: int,
         for t in range(horizon + 1):
             tmp.fit_ar_model(tr1[:, :t + 2, :])
             tmp.calibrate(tr2[:, :t + 2, :])
+            if use_lr_weights and t >= 1 and tmp._scores is not None and tmp._scores.size > 0:
+                wp = weight_predictor
+                train_feat = wp._featurize_prefixes(train_Y[:, :t + 1, :])
+                test_feat  = wp._featurize_prefixes(test_data[:, :t + 1, :])
+                cal_feat   = wp._featurize_prefixes(tr2[:, :t + 1, :])
+                w = wp._compute_density_ratio_weights(
+                    trainX=train_feat, testX=test_feat, evalX=cal_feat)
+                if w.shape[0] == tmp._scores.shape[0]:
+                    tmp._weights = w
+                    tmp._q = None
 
             alpha_used = alpha_series.copy()
             alpha_next = alpha_series.copy()
