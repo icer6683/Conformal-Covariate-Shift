@@ -75,7 +75,7 @@ HOW IT WORKS
       for t in range(T):                          # T = 23 (hours 0..22)
           fit   linear model on train[:, :t+2, :]
           build calibration scores on cal[:, :t+2, :]
-          (gamma selection every 5 steps)
+          (gamma selection every 4 steps)
           if with_shift and t >= 1:
               cross-split test into two halves
               for each (predict_half, context_half):
@@ -196,7 +196,7 @@ ETHNICITY_MAP = {
 # Everything not in the map goes to OTHER
 ETHNICITY_DUMMIES = ["BLACK", "HISPANIC", "ASIAN", "OTHER"]  # WHITE = reference
 
-GAMMA_GRID = [0.000001, 0.00001, 0.0001, 0.001, 0.01, 0.1, 1]
+GAMMA_GRID = [0.001, 0.005, 0.01, 0.05, 0.1, 0.2]
 
 # Number of static features after encoding
 N_STATIC = 1 + 1 + len(ETHNICITY_DUMMIES)  # Age + gender_M + 4 ethnicity dummies = 6
@@ -714,6 +714,12 @@ def run_medical_experiment(data, cal_frac=0.5, alpha=0.1, seed=42,
     if gamma_grid is None:
         gamma_grid = GAMMA_GRID
 
+    # LR-only ablation flag: when the grid is all zeros, ACI is disabled and
+    # gamma must remain 0 throughout the run (no compensation; pure LR
+    # weighting).  Used to force gamma_opt to 0.0 at init and after every
+    # gamma-selection call, as a defensive guarantee.
+    _aci_off = all(float(g) == 0.0 for g in gamma_grid)
+
     # -- Subsample patients if requested -----------------------------------
     rng_sub = np.random.default_rng(seed)
 
@@ -793,7 +799,11 @@ def run_medical_experiment(data, cal_frac=0.5, alpha=0.1, seed=42,
 
     # -- ACI state ---------------------------------------------------------
     alpha_t   = np.full(n_test, alpha, dtype=float)
-    gamma_opt = float(gamma_grid[0])
+    # Initialize at the middle of the grid so ACI is active during the first
+    # few steps before gamma selection fires (cal-score quantile collapses
+    # fast under single-point calibration, so ACI cannot wait).  For the
+    # lr_only ablation (gamma_grid=[0.0]) this is 0.0, enforced below.
+    gamma_opt = 0.0 if _aci_off else float(gamma_grid[len(gamma_grid) // 2])
 
     coverage_by_time  = []
     width_by_time     = []
@@ -831,8 +841,8 @@ def run_medical_experiment(data, cal_frac=0.5, alpha=0.1, seed=42,
         predictor._weights = np.ones(len(cal_scores_arr), dtype=float)
         predictor._q       = None
 
-        # -- Gamma selection every 5 steps --------------------------------
-        if t > 0 and (t % 10 == 0):
+        # -- Gamma selection every 4 steps --------------------------------
+        if t > 0 and (t % 4 == 0):
             sel_seed = seed + 10000 + t
             gamma_opt, gamma_scores = _select_gamma(
                 Y_train=Y_train, X_train=X_train, S_train=S_train,
@@ -842,6 +852,8 @@ def run_medical_experiment(data, cal_frac=0.5, alpha=0.1, seed=42,
                 with_shift=with_shift, Y_test=Y_test, X_test=X_test,
                 S_test=S_test, weight_predictor=predictor,
             )
+            if _aci_off:
+                gamma_opt = 0.0
             scores_str = "  ".join(
                 f"gamma={g:.3f}->{v:.3f}" for g, v in gamma_scores.items()
                 if np.isfinite(v)

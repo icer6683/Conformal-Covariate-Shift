@@ -204,7 +204,7 @@ run_finance() {
 # Medical: 3 multi-seed runs (10 seeds, n_traincal=1000, n_test=500)
 # -----------------------------------------------------------------------------
 MED_PKL=medical/sepsis_experiment_data_nacl_target.pkl
-MED_GAMMA="1e-6 5e-6 1e-5 5e-5 1e-4 5e-4 1e-3 5e-3 1e-2"
+MED_GAMMA="1e-3 5e-3 1e-2 5e-2 1e-1 2e-1"
 
 run_medical() {
     if [ ! -f "$MED_PKL" ]; then

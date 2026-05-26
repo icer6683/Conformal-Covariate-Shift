@@ -154,9 +154,9 @@ When `--with_shift` is set, `_featurize_YX_summaries` replaces the default last-
 clipped to (1e-6, 1−1e-6). Applied per-series.
 
 ### Gamma selection
-Every 10 time steps (every 5 for medical), 3-way split of training data:
+Every 10 time steps (every 4 for medical), 3-way split of training data:
 - D_tr^(1): model fitting; D_tr^(2): calibration; D_tr^(3): evaluation
-- Γ = {0.001, 0.005, 0.01, 0.05, 0.1} in synthetic; {0.001, 0.005, 0.01, 0.05} in finance/tech (default); {0.001, 0.005, 0.01, 0.05, 0.1} in utilities (g10 grid); [1e-6 … 0.01] (9 values) in medical
+- Γ = {0.001, 0.005, 0.01, 0.05, 0.1} in synthetic; {0.001, 0.005, 0.01, 0.05} in finance/tech (default); {0.001, 0.005, 0.01, 0.05, 0.1} in utilities (g10 grid); {0.001, 0.005, 0.01, 0.05, 0.1, 0.2} in medical (raised after single-point cal — old [1e-6 … 0.01] under-shot target by ~4pp)
 - Simulate ACI on D_tr^(3) for each γ; pick γ with average coverage (second half of horizon) closest to 1−α
 
 ---
@@ -196,7 +196,7 @@ Paper ablations are performed through `AdaptedCAFHT` parameter tweaks, not a sep
 ### Medical
 - α=0.1, cal_frac=0.5, default seed=42; multi-seed uses base_seed=1000
 - n_traincal=1000, n_test=500 (subsampled from full pool each seed)
-- gamma_grid=[1e-6, 5e-6, 1e-5, 5e-5, 1e-4, 5e-4, 1e-3, 5e-3, 1e-2] (finer grid; gamma reselected every 5 steps)
+- gamma_grid=[0.001, 0.005, 0.01, 0.05, 0.1, 0.2] (raised after switch to single-point cal; gamma reselected every 4 steps; initial gamma_opt=0.05 so ACI is active before first selection fires)
 
 ---
 
@@ -340,8 +340,8 @@ No notebooks, no OnlineConformalPredictor baseline, no MIMIC-III extraction pipe
 - **Category**: Proposed combined method (LR weighting + ACI). Replaces AR(1) with a one-step-ahead autoregressive OLS on (lagged NaCl + dynamic covariates at time t + static covariates).
 - **Hyperparameters**:
   - α = 0.1 (default), cal_frac = 0.5, seed = 42
-  - gamma_grid = [1e-6, 5e-6, 1e-5, 5e-5, 1e-4, 5e-4, 1e-3, 5e-3, 1e-2] (finer grid than finance/synthetic)
-  - Gamma reselected every **5** steps (vs every 10 in finance/synthetic)
+  - gamma_grid = [0.001, 0.005, 0.01, 0.05, 0.1, 0.2] (raised after switch to single-point cal)
+  - Gamma reselected every **4** steps (vs every 10 in finance/synthetic); initial gamma_opt=0.05
   - T = 23 prediction steps (hours 1–23, predicting from prefix of length t+2)
 
 #### Unweighted baseline (no separate script)
@@ -368,7 +368,7 @@ No notebooks, no OnlineConformalPredictor baseline, no MIMIC-III extraction pipe
 #### Gamma selection: `_select_gamma`
 - **Code name**: `_select_gamma` (`medical/medical_conformal.py:533`)
 - **Mechanism**: 3-way split of training data (fit / cal / eval, each ≈n/3); simulates ACI without LR weighting; picks γ with second-half coverage closest to 1−α
-- **Called**: every 5 steps in the main loop
+- **Called**: every 4 steps in the main loop
 
 ---
 
