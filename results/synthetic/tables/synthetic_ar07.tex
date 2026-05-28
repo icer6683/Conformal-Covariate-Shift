@@ -1,0 +1,43 @@
+\begin{table}[ht]
+\centering
+\small
+\setlength{\tabcolsep}{8pt}
+\renewcommand{\arraystretch}{1.15}
+\caption{%
+  Synthetic results, AR coefficient $\rho=0.7$ ($T=40$, $\alpha=0.1$, 30 seeds, target coverage $= 0.90$). \textit{Coverage}: pooled empirical coverage across all series and time steps. $\overline{|\Delta|}$: mean per-seed absolute deviation from $1-\alpha$. \textit{Width}: mean prediction interval width.
+}
+\label{tab:synthetic_ar07}
+\begin{tabular}{@{} llrrr @{}}
+\toprule
+{\bfseries Data condition} & {\bfseries Algorithm}  & {\bfseries Coverage} & $\boldsymbol{\overline{|\Delta|}}$ & {\bfseries Width} \\
+\midrule
+No shift, static
+  & Weighted CAFHT     & 0.899 & 0.002 & 1.058 \\
+No shift, static
+  & Uniform weights    & 0.899 & 0.002 & 1.058 \\
+No shift, static
+  & Zero $\gamma$      & 0.899 & 0.002 & 1.048 \\
+\midrule
+No shift, dynamic
+  & Weighted CAFHT     & 0.899 & 0.002 & 1.177 \\
+No shift, dynamic
+  & Uniform weights    & 0.899 & 0.002 & 1.177 \\
+No shift, dynamic
+  & Zero $\gamma$      & 0.899 & 0.002 & 1.157 \\
+\midrule
+Static shift
+  & Weighted CAFHT     & 0.893 & 0.007 & 1.054 \\
+Static shift
+  & Uniform weights    & 0.901 & 0.002 & 1.053 \\
+Static shift
+  & Zero $\gamma$      & 0.894 & 0.006 & 1.035 \\
+\midrule
+Dynamic shift
+  & Weighted CAFHT     & 0.860 & 0.040 & 1.244 \\
+Dynamic shift
+  & Uniform weights    & 0.859 & 0.041 & 1.238 \\
+Dynamic shift
+  & Zero $\gamma$      & 0.836 & 0.064 & 1.161 \\
+\bottomrule
+\end{tabular}
+\end{table}
