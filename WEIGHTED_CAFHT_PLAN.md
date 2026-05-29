@@ -13,10 +13,10 @@ A running log of what is done and what is still pending. Update it whenever a mi
 ### Current progress
 
 - Step 1: Q1–Q8 resolved (2026-05-29; see § 6 for the chosen answers).
+- Step 2: Renamed 11 legacy files with `OLD_` prefix (2026-05-29; commit `22358a6`). Pure `git mv`, 100% similarity, no content edits. List in § B.1.
 
 ### Remaining milestones
 
-- **Step 2** — `OLD_` renames: `git mv` the 11 legacy files to `OLD_<name>` (§ 4 step 2; list in § B.1).
 - **Step 3** — Skeleton the 14 new files with docstrings only (§ 4 step 3).
 - **Step 4** — Implement `core/weighted_cafht_whole.py` end-to-end + inline tests (§ 4 step 4).
 - **Step 5** — Implement `core/weighted_cafht_last.py` end-to-end + inline tests (§ 4 step 5).
@@ -318,9 +318,9 @@ Each numbered step ends in a checkpoint that should be obviously verifiable (fil
 
 Single sit-down with the user. Each answer feeds into the file layout (Q1, Q5, Q6, Q7), the LR featurizer (Q2), the last-step predictor (Q3), the γ rule (Q4), or the D_ACI partition (Q8). **Checkpoint**: Q1–Q8 marked resolved at the top of this file with the chosen answer in one line each. ✓
 
-### 2. `OLD_` renames (one commit, no content edits)
+### 2. `OLD_` renames (one commit, no content edits)  *(DONE — 2026-05-29; commit `22358a6`)*
 
-`git mv` the 11 files listed in § B.1. Update no other files. **Checkpoint**: tree shows the new names; `git status` is clean after the commit; running any of the existing `OLD_*` scripts still works (just under the new name).
+`git mv` the 11 files listed in § B.1. Update no other files. **Checkpoint**: tree shows the new names; `git status` is clean after the commit; running any of the existing `OLD_*` scripts still works (just under the new name). ✓ All 11 renamed at 100% similarity; tree clean. (Note: cross-imports between `OLD_*` files are intentionally left unfixed — these are frozen reference files, not in any active import path, per § B.1.)
 
 ### 3. Skeleton new files (one commit, all empty)
 
