@@ -14,10 +14,11 @@ A running log of what is done and what is still pending. Update it whenever a mi
 
 - Step 1: Q1–Q8 resolved (2026-05-29; see § 6 for the chosen answers).
 - Step 2: Renamed 11 legacy files with `OLD_` prefix (2026-05-29; commit `22358a6`). Pure `git mv`, 100% similarity, no content edits. List in § B.1.
+- Step 3: Created the 14 new file stubs (2026-05-29; uncommitted), docstring-only, all byte-compile. 2 algo files + 6 runners + 4 multi-seed wrappers + `run_all_v2.sh` + `build_tex_tables_v2.py`.
+- Follow-on: marked 8 legacy per-domain run scripts `OLD_` (2026-05-29; uncommitted) — superseded by `run_all_v2.sh`. See § B.1 follow-on table.
 
 ### Remaining milestones
 
-- **Step 3** — Skeleton the 14 new files with docstrings only (§ 4 step 3).
 - **Step 4** — Implement `core/weighted_cafht_whole.py` end-to-end + inline tests (§ 4 step 4).
 - **Step 5** — Implement `core/weighted_cafht_last.py` end-to-end + inline tests (§ 4 step 5).
 - **Step 6** — Medical runner pair + 10-seed wrappers (§ 4 step 6).
@@ -322,9 +323,9 @@ Single sit-down with the user. Each answer feeds into the file layout (Q1, Q5, Q
 
 `git mv` the 11 files listed in § B.1. Update no other files. **Checkpoint**: tree shows the new names; `git status` is clean after the commit; running any of the existing `OLD_*` scripts still works (just under the new name). ✓ All 11 renamed at 100% similarity; tree clean. (Note: cross-imports between `OLD_*` files are intentionally left unfixed — these are frozen reference files, not in any active import path, per § B.1.)
 
-### 3. Skeleton new files (one commit, all empty)
+### 3. Skeleton new files (one commit, all empty)  *(DONE — 2026-05-29; uncommitted)*
 
-Touch the 14 new files (`core/weighted_cafht_{whole,last}.py`; 6 per-domain runners; 4 multi-seed wrappers; `run_all_v2.sh`; `build_tex_tables_v2.py`) with only a module docstring describing what each file will contain. **Checkpoint**: `find . -name "OLD_*"` lists 11; `find . -newer ...` for the empty stubs lists 14; nothing else changed.
+Touch the 14 new files (`core/weighted_cafht_{whole,last}.py`; 6 per-domain runners; 4 multi-seed wrappers; `run_all_v2.sh`; `build_tex_tables_v2.py`) with only a module docstring describing what each file will contain. **Checkpoint**: `find . -name "OLD_*"` lists 11; `find . -newer ...` for the empty stubs lists 14; nothing else changed. ✓ Verified: 11 `OLD_` files, 14 new untracked stubs, all 13 Python stubs byte-compile and `run_all_v2.sh` parses.
 
 ### 4. `core/weighted_cafht_whole.py` — Algorithm 1, end-to-end
 
@@ -601,6 +602,19 @@ This restructuring is purely additive at the directory level: no files are moved
 | `build_tex_tables.py` | `OLD_build_tex_tables.py` |
 
 After this step, none of these files are referenced by any new code path. They are kept in tree only for human reference and for git-blame continuity.
+
+**Follow-on (2026-05-29): 8 legacy per-domain run scripts** also marked `OLD_` for the same reason — they are superseded by `run_all_v2.sh` (§ 5.3), exactly as `run_all_experiments.sh` was. Pure `git mv`, no content edits.
+
+| Old path | New (renamed) path |
+|---|---|
+| `run_finance_experiments.sh` | `OLD_run_finance_experiments.sh` |
+| `run_new_finance_experiments.sh` | `OLD_run_new_finance_experiments.sh` |
+| `run_static_shift_diagnostics.sh` | `OLD_run_static_shift_diagnostics.sh` |
+| `run_synthetic_9cell.sh` | `OLD_run_synthetic_9cell.sh` |
+| `run_synthetic_experiments.sh` | `OLD_run_synthetic_experiments.sh` |
+| `run_utilities_experiments.sh` | `OLD_run_utilities_experiments.sh` |
+| `run_utilities_g03_experiments.sh` | `OLD_run_utilities_g03_experiments.sh` |
+| `run_utilities_g10_experiments.sh` | `OLD_run_utilities_g10_experiments.sh` |
 
 ### B.2 Files that stay in place (unchanged name and content)
 
