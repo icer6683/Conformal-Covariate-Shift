@@ -2,7 +2,30 @@
 
 This document is the implementation plan for the **two-regime / two-algorithm** revision of the project. The previous version of this file (v1, kept in git history) was scoped to writing code inside `CAFHT/` and assumed a single trajectory-level method; both assumptions are obsolete and have been discarded.
 
-**Section order**: §0 (ground rules) → §1 (open questions) → §2 (file layout) → §3 (core components) → §4 (per-domain wiring) → §5 (work plan) → §6 (experiment + tables) → **Additional references**: §A (what changed), §B (migration), §C (sanity checks), §D (out of scope).
+**Section order**: §0 (ground rules) → §1 (file layout) → §2 (core components) → §3 (per-domain wiring) → §4 (work plan) → §5 (experiment + tables) → §6 (clarification questions, answered) → **Additional references**: §A (what changed), §B (migration), §C (sanity checks), §D (out of scope).
+
+---
+
+# Progress & Milestones
+
+A running log of what is done and what is still pending. Update it whenever a milestone (or sub-step) is completed, per the rule in § 0.
+
+### Current progress
+
+- Step 1: Q1–Q8 resolved (2026-05-29; see § 6 for the chosen answers).
+
+### Remaining milestones
+
+- **Step 2** — `OLD_` renames: `git mv` the 11 legacy files to `OLD_<name>` (§ 4 step 2; list in § B.1).
+- **Step 3** — Skeleton the 14 new files with docstrings only (§ 4 step 3).
+- **Step 4** — Implement `core/weighted_cafht_whole.py` end-to-end + inline tests (§ 4 step 4).
+- **Step 5** — Implement `core/weighted_cafht_last.py` end-to-end + inline tests (§ 4 step 5).
+- **Step 6** — Medical runner pair + 10-seed wrappers (§ 4 step 6).
+- **Step 7** — Finance runner pair, per-window (§ 4 step 7).
+- **Step 8** — Synthetic runner pair + 30-seed wrappers (§ 4 step 8).
+- **Step 9** — `run_all_v2.sh` + `build_tex_tables_v2.py` (§ 4 step 9).
+- **Step 10** — Pilot run: medical, both regimes, 10 seeds (§ 4 step 10).
+- **Step 11** — Full sweep `bash run_all_v2.sh --all` (§ 4 step 11).
 
 ---
 
@@ -16,59 +39,11 @@ This document is the implementation plan for the **two-regime / two-algorithm** 
   (a) **stay in place with their current name** if they are fully reused (data loaders, data files, plotting utilities, documentation), OR
   (b) **get an `OLD_` prefix** to mark them as legacy reference — superseded by a new file with a distinct name. We do not import from `OLD_*` files at runtime; if a function from an `OLD_*` file is needed, its logic is copied into the new module that needs it.
 - **Existing `results/` outputs are preserved in place.** New results land in new subfolders (`results/{domain}/{regime}/...`) alongside the legacy `results/{domain}/{json,pdf,tables}/` folders. No mass renames or moves under `results/`.
+- **Always update Progress & Milestones after a completed milestone.** Whenever any implementation step (or sub-step) finishes, edit the **Progress & Milestones** section at the top of this file: move the completed item from "Remaining milestones" to "Current progress" with a one-liner summary (date + what was done). Treat this as part of the milestone's checkpoint — the milestone is not "done" until the log is updated.
 
 ---
 
-## 1. Clarification questions (block coding)
-
-These need answers before implementation starts. Each has a concrete impact noted.
-
-**Q1. Which (domain × regime) cells do we evaluate?**
-Combinations are `{synthetic, finance, medical} × {last-step, whole-trajectory}` = 6. We have committed effort to whole-trajectory for all three domains historically. Last-step is new. Do we want all 6 cells, or only some?
-*Impact*: number of runners to write; number of result subfolders; size of LaTeX tables; CPU budget for the next sweep.
-
-**Q2. LR featurizer when the shift assumption is violated.**
-The whole-trajectory algorithm assumes shift is on `X_1` only and prescribes feeding `X_1^(i)` to the classifier. For medical, the Norepinephrine split induces shift on a 12-hour window (so `X_{1:12}`) not on `X_1`. Two options:
-  (a) follow the spec literally and accept some loss of separability;
-  (b) use the entire `X_{1:T}` for the LR classifier and document the deviation.
-*Impact*: medical Alg. 1's empirical coverage. Finance has a similar question (Tech/Util shift is on the joint covariate distribution, not on X_1).
-
-**Q3. Predictor for last-step (Alg. 2) on each domain.**
-The algorithm says "regress `Y_{T+1}` on `X_{1:T}`". For our settings:
-  - **Synthetic**: with `X_t = Y_{t-1}` (the AR(1) reinterpretation), the natural predictor is just an OLS regression of `Y_{T+1}` on the full lagged history.
-  - **Finance**: `X` is 4-dimensional × 40 days = 160 features per ticker if flattened. Options: flatten + L2-regularized linear; use only the most recent few X_t; use an RNN.
-  - **Medical**: `X` is 3-dim × 24 hours + 6 static = 78 features per patient (or 84 with NaCl history). Options: flatten + ridge; use last 12 hours only.
-*Impact*: predictor accuracy, which dominates residual magnitude and therefore interval width. **Strong recommendation: use ridge regression on flattened `X_{1:T}` with a small held-out CV for λ; defer RNNs to a later iteration.**
-
-**Q4. γ-selection criterion in the whole-trajectory algorithm.**
-The algorithm box says "Run the simple ACI method with training set D_tr^(1), calibration set D_tr^(2), and test set D_tr^(3). Record the performance" and pick γ with "best performance"; CAFHT's own implementation picks γ by minimum mean band width (`CAFHT/ConformalizedTS/methods.py:393`); our pre-v2 `_select_gamma` in medical/finance picked γ by "tail-half coverage closest to 1−α". **Recommendation: match CAFHT — run the simple-ACI procedure exactly as the algorithm box specifies (train = D_tr^(1), cal = D_tr^(2), test = D_tr^(3); the score bank for this sandbox ACI is built from D_tr^(2) residuals — *not* D_ACI), measure mean band width on D_tr^(3), and pick the γ with minimum mean width.**
-
-**Q5. Treatment of legacy `core/algorithm.py:AdaptedCAFHT` and per-domain runners.**
-The user has chosen the rename-with-`OLD_`-prefix approach (see § 0 ground rules and § B.1). Open sub-question: do we keep `OLD_` files committed in the repository long-term, or move them out after the new pipeline is validated and the legacy numbers are no longer needed?
-**Recommendation: keep them in tree indefinitely.** They are reference-only, no runtime cost, and useful for git-blame continuity and for paper-revision cross-checks. We can revisit deletion after the paper is submitted.
-
-**Q6. Existing `results/` JSON outputs.**
-Existing `results/{medical,finance,synthetic}/{json,pdf,tables}/` files were produced under the old AdaptedCAFHT semantics, then under the partially-fixed semantics. None of them are comparable to the new algorithms.
-Per § 0, no mass move under `results/`. New outputs land in `results/{domain}/{regime}/{json,pdf,tables}/` alongside the existing subdirs.
-Open sub-question: should the legacy `.tex` tables (`results/{domain}/tables/{domain}.tex`) be deleted, or kept and shadowed by the new ones at `results/{domain}/{regime}/tables/{domain}_{regime}.tex`?
-**Recommendation: keep the legacy `.tex` files in place; paper drafts will pull from the new paths only.**
-
-**Q7. Naming.**
-Two options for the user-facing names:
-  (a) "Weighted CAFHT (whole-trajectory)" and "Weighted CAFHT (last-step)" — emphasizes shared lineage; matches the algo-box titles.
-  (b) "Weighted CAFHT" (whole-trajectory) and "Weighted Split CP" (last-step) — semantically more accurate since last-step has no per-step inner conformal loop.
-*Impact*: paper section names, table captions, file names.
-**Recommendation: (a)** — match the user's algo boxes so the paper and code share terminology.
-
-**Q8. ACI conformity-score bank (the hidden D_ACI).**
-The whole-trajectory algorithm box runs ACI in two places in the main algorithm (per cal series to produce `ε_i`; per test series to produce `Ĉ^aci_t`) but **does not specify where the conformity scores used inside those ACI runs come from**. ACI computes its band width as a quantile of past conformity scores; without a banked score history, ACI has no quantile to draw on at step 1. This is a genuine spec gap, not an implementation detail.
-We propose adding an explicit held-out set **D_ACI** — **disjoint from D_tr, D_cal, and D_test** — whose precomputed absolute residuals `{|Y_t^(i) − Ŷ_t^(i)| : i ∈ D_ACI, t ∈ [T+1]}` are frozen as the score bank for the main-algorithm ACI invocations on D_cal and D_test. The γ-selection ACI (the simple-ACI sandbox inside `select_gamma`) is a **separate** invocation; per the algorithm box, it uses the 3-way split D_tr^(1)/D_tr^(2)/D_tr^(3) of D_tr and draws its own (internal) score bank from D_tr^(2), not from D_ACI. See §3.0 for the resulting four-way data partition (D_ACI + D_tr + D_cal + D_test) and §3.2/§3.3 for the API changes.
-*Impact*: data partition at the runner level (now four-way, with D_ACI peeled off first); class signatures (`ACI.predict_intervals`, `WeightedCAFHTWholeTrajectory.{calibration_scores, predict_bands}`) take an explicit `score_bank` argument; runner CLI gains `--frac_aci` and `--gamma_split`.
-**Recommendation: adopt the proposal as described in §3.0.** Default: peel 15% of trajectories off the raw pool as D_ACI before splitting the remainder into D_tr / D_cal / D_test by their existing fractions; inner γ-selection split of D_tr defaults to 0.33 / 0.33 / 0.34. Algorithm 2 (last-step) does not invoke ACI, so D_ACI is not needed there.
-
----
-
-## 2. Proposed file layout
+## 1. Proposed file layout
 
 Legend: **STAY** = file unchanged, original name kept; **OLD_** = renamed with `OLD_` prefix to mark as legacy reference (no content changes); **NEW** = new file created in this restructuring.
 
@@ -115,8 +90,8 @@ results/{domain}/{regime}/{json,pdf,tables}/   NEW   6 new subfolders total
 
 OLD_run_all_experiments.sh              OLD_
 OLD_build_tex_tables.py                 OLD_
-run_all_v2.sh                           NEW     regime-aware dispatcher (§ 6)
-build_tex_tables_v2.py                  NEW     6 tables: domain × regime (§ 6)
+run_all_v2.sh                           NEW     regime-aware dispatcher (§ 5)
+build_tex_tables_v2.py                  NEW     6 tables: domain × regime (§ 5)
 
 CAFHT/                                  unchanged (read-only)
 ```
@@ -138,11 +113,11 @@ This means the new tree is fully separable from the old tree: deleting all `OLD_
 
 ---
 
-## 3. Core components in detail
+## 2. Core components in detail
 
-Both algorithm files are self-contained. The three primitives (weighted quantile with δ_∞ atom, density-ratio weights, ACI updater for the whole-trajectory file only) appear as module-level helpers at the top of each file. Below: a clarification of the hidden held-out set required by ACI (§3.0), the contract for each helper, then the class layout for each algorithm. The two files duplicate the helper code intentionally; do not refactor into shared modules.
+Both algorithm files are self-contained. The three primitives (weighted quantile with δ_∞ atom, density-ratio weights, ACI updater for the whole-trajectory file only) appear as module-level helpers at the top of each file. Below: a clarification of the hidden held-out set required by ACI (§ 2.0), the contract for each helper, then the class layout for each algorithm. The two files duplicate the helper code intentionally; do not refactor into shared modules.
 
-### 3.0 The held-out set D_ACI (whole-trajectory only)
+### 2.0 The held-out set D_ACI (whole-trajectory only)
 
 **The algorithm box is silent on where ACI's conformity scores come from.** It runs ACI in two places — once per calibration trajectory to produce `ε_i`, and once per deployed test trajectory to produce `Ĉ^aci_t` — but does not say what conformity-score history seeds those ACI runs. ACI's band at step t is built from a quantile of past scores; with no banked history, ACI has nothing to quantile over at step 1. This plan resolves the silence by introducing an explicit held-out set **D_ACI** that is **disjoint from D_tr, D_cal, and D_test**: its absolute-residual array is frozen as the score bank for every main-algorithm ACI invocation downstream of predictor fitting.
 
@@ -164,7 +139,7 @@ Both algorithm files are self-contained. The three primitives (weighted quantile
 
 **Algorithm 2 (last-step) does not need D_ACI.** No ACI is invoked at any point.
 
-### 3.1 Shared helpers (duplicated in both algo files)
+### 2.1 Shared helpers (duplicated in both algo files)
 
 ```
 def weighted_quantile_with_inf(scores, w_cal, w_test, level) -> float:
@@ -197,24 +172,25 @@ def density_ratio_weights(
 
 Both helpers' logic is adapted from `OLD_algorithm.py:AdaptedCAFHT._compute_density_ratio_weights` and `_weighted_quantile` — the original `_weighted_quantile` is generalized to insert the δ_∞ atom and to take an unnormalized weight vector + a separate test-point mass.
 
-### 3.2 ACI updater (only in `core/weighted_cafht_whole.py`)
+### 2.2 ACI updater (only in `core/weighted_cafht_whole.py`)
 
 ```
 class ACI:
     """
     Single-trajectory adaptive conformal inference:
         α_{t+1} = α_t + γ · (α − err_t),  clipped to (1e-6, 1 - 1e-6).
-    Conformity quantile is computed from a frozen `score_bank` (the D_ACI residuals;
-    see § 3.0). Predictor-agnostic: takes precomputed (y_pred, y_true) trajectories
-    for online error computation. Mirrors CAFHT/ConformalizedTS/methods.py:Adaptive_Conformal_Inference
-    but with an externally-supplied score bank instead of an internally-grown buffer.
+    Conformity quantile is computed from a frozen `score_bank` (absolute residuals)
+    supplied by the caller. Predictor-agnostic: takes precomputed (y_pred, y_true)
+    trajectories for online error computation. Mirrors
+    CAFHT/ConformalizedTS/methods.py:Adaptive_Conformal_Inference but with an
+    externally-supplied score bank instead of an internally-grown buffer.
     """
     def predict_intervals(self, score_bank, y_pred, y_true, gamma, seed=...): ...
 ```
 
-`score_bank` is an `(n × (T+1))`-shaped (or flattened) array of absolute residuals supplied by the caller. The caller is responsible for what subset of trajectories it represents: during γ selection it is built from D_tr^(2) residuals (the simple-ACI sandbox); during the main-algorithm calibration and deployment phases it is built from D_ACI residuals (see § 3.0). Algorithm 2 does not need ACI, so `weighted_cafht_last.py` does not include this class.
+`score_bank` is an `(n × (T+1))`-shaped (or flattened) array of absolute residuals supplied by the caller. The caller is responsible for what subset of trajectories it represents: during γ selection it is built from D_tr^(2) residuals (the simple-ACI sandbox); during the main-algorithm calibration and deployment phases it is built from D_ACI residuals (see § 2.0). Algorithm 2 does not need ACI, so `weighted_cafht_last.py` does not include this class.
 
-### 3.3 `core/weighted_cafht_whole.py`  (Algorithm 1)
+### 2.3 `core/weighted_cafht_whole.py`  (Algorithm 1)
 
 ```
 class WeightedCAFHTWholeTrajectory:
@@ -224,7 +200,7 @@ class WeightedCAFHTWholeTrajectory:
     (n, T+1, ndim) for D_tr (full), D_ACI, D_cal, D_test, plus the X arrays used
     by the LR step. Predictor fitting itself happens in the runner on the FULL
     D_tr; D_ACI must be peeled off the raw pool BEFORE the D_tr/D_cal/D_test
-    split per § 3.0.
+    split per § 2.0.
     """
 
     def __init__(self, alpha, gamma_grid, featurize_fn,
@@ -267,9 +243,9 @@ class WeightedCAFHTWholeTrajectory:
         # 5. Concatenate; return shape (n_test, T+1, 2, ndim).
 ```
 
-The runner is responsible for the four-way data partition `(D_ACI, D_tr, D_cal, D_test)` per § 3.0 — D_ACI must be peeled off the raw pool **before** the conventional D_tr / D_cal / D_test split, and predictors must be fit on the **full** D_tr before passing the (pred, true) pairs into `predict_bands`. The class itself never sees D_ACI as a set — only as a precomputed residual array (`aci_data`).
+The runner is responsible for the four-way data partition `(D_ACI, D_tr, D_cal, D_test)` per § 2.0 — D_ACI must be peeled off the raw pool **before** the conventional D_tr / D_cal / D_test split, and predictors must be fit on the **full** D_tr before passing the (pred, true) pairs into `predict_bands`. The class itself never sees D_ACI as a set — only as a precomputed residual array (`aci_data`).
 
-### 3.4 `core/weighted_cafht_last.py`  (Algorithm 2)
+### 2.4 `core/weighted_cafht_last.py`  (Algorithm 2)
 
 ```
 class WeightedCAFHTLastStep:
@@ -300,11 +276,11 @@ Trivial compared to Alg. 1 — just the cross-half + δ_∞ quantile step.
 
 ---
 
-## 4. Per-domain predictors and featurizers
+## 3. Per-domain predictors and featurizers
 
 Each predictor and featurizer is implemented **inside its runner file** — `{domain}_runner_{regime}.py` — as a module-level function or small class. The runners do not import from a shared `predictors.py` / `featurizers.py` module (no such modules exist in this plan; per § 0, runners are self-contained).
 
-### 4.1 Whole-trajectory predictors (Algorithm 1) — defined in `{domain}_runner_whole.py`
+### 3.1 Whole-trajectory predictors (Algorithm 1) — defined in `{domain}_runner_whole.py`
 
 | Domain | Predictor symbol | Implementation | Output |
 |---|---|---|---|
@@ -312,7 +288,7 @@ Each predictor and featurizer is implemented **inside its runner file** — `{do
 | Finance | `LinearCovariateModel` (copied from `OLD_finance_conformal.py`) in `finance_runner_whole.py` | per-step OLS on `X_t`; fit once globally, applied at each t | `(n, T+1, 1)` |
 | Medical | `LinearCovariateModel` (copied from `OLD_medical_conformal.py`) in `medical_runner_whole.py` | one-step-ahead AR `Y_{t+1} ~ Y_t + X_t + S` | `(n, T+1, 1)` |
 
-### 4.2 Last-step predictors (Algorithm 2) — defined in `{domain}_runner_last.py`
+### 3.2 Last-step predictors (Algorithm 2) — defined in `{domain}_runner_last.py`
 
 | Domain | Predictor symbol | Implementation | Output |
 |---|---|---|---|
@@ -320,7 +296,7 @@ Each predictor and featurizer is implemented **inside its runner file** — `{do
 | Finance | `LastStepRidge(...)` class in `finance_runner_last.py` | ridge of `Y_{T+1}` on flattened `X_{1:T}` (4·T features); λ by 5-fold CV | `(n,)` |
 | Medical | `LastStepRidge(...)` class in `medical_runner_last.py` | ridge of `Y_{T+1}` on flattened `X_{1:T}` + S (3·T + 6 features); λ by 5-fold CV | `(n,)` |
 
-### 4.3 LR featurizers — defined inside each runner
+### 3.3 LR featurizers — defined inside each runner
 
 Each runner defines its featurizer as a small function taking the X array and returning a 2D feature matrix, then passes it as `featurize_fn` to the algorithm class.
 
@@ -334,13 +310,13 @@ The function names (`featurize_x1`, `featurize_xall`) are by convention; the alg
 
 ---
 
-## 5. Sequence of work
+## 4. Sequence of work
 
 Each numbered step ends in a checkpoint that should be obviously verifiable (file present, test passing, JSON committed, table rendering). Steps 1–3 are housekeeping and produce no behavior change; steps 4–10 build the new pipeline incrementally; step 11 is the full experiment sweep.
 
-### 1. Resolve Q1–Q8
+### 1. Resolve Q1–Q8  *(DONE — 2026-05-29; answers in § 6)*
 
-Single sit-down with the user. Each answer feeds into the file layout (Q1, Q5, Q6, Q7), the LR featurizer (Q2), the last-step predictor (Q3), the γ rule (Q4), or the D_ACI partition (Q8). Block everything else on this step. **Checkpoint**: Q1–Q8 marked resolved at the top of this file with the chosen answer in one line each.
+Single sit-down with the user. Each answer feeds into the file layout (Q1, Q5, Q6, Q7), the LR featurizer (Q2), the last-step predictor (Q3), the γ rule (Q4), or the D_ACI partition (Q8). **Checkpoint**: Q1–Q8 marked resolved at the top of this file with the chosen answer in one line each. ✓
 
 ### 2. `OLD_` renames (one commit, no content edits)
 
@@ -352,7 +328,7 @@ Touch the 14 new files (`core/weighted_cafht_{whole,last}.py`; 6 per-domain runn
 
 ### 4. `core/weighted_cafht_whole.py` — Algorithm 1, end-to-end
 
-Inline order: `weighted_quantile_with_inf` → `density_ratio_weights` → `ACI` class (with `score_bank` argument per § 3.2) → `WeightedCAFHTWholeTrajectory` class (with D_ACI partition logic per § 3.0). The class exposes `select_gamma`, `calibration_scores`, `predict_bands` per § 3.3.
+Inline order: `weighted_quantile_with_inf` → `density_ratio_weights` → `ACI` class (with `score_bank` argument per § 2.2) → `WeightedCAFHTWholeTrajectory` class (with D_ACI partition logic per § 2.0). The class exposes `select_gamma`, `calibration_scores`, `predict_bands` per § 2.3.
 
 **Inline tests** (at the bottom of the file under `if __name__ == "__main__"`):
 - `weighted_quantile_with_inf` with uniform weights matches `np.quantile(scores, level, interpolation='higher')`.
@@ -364,7 +340,7 @@ Inline order: `weighted_quantile_with_inf` → `density_ratio_weights` → `ACI`
 
 ### 5. `core/weighted_cafht_last.py` — Algorithm 2, end-to-end
 
-Inline order: `weighted_quantile_with_inf` (copied verbatim from step 4) → `density_ratio_weights` (copied verbatim) → `WeightedCAFHTLastStep` class per § 3.4. No ACI class, no D_ACI.
+Inline order: `weighted_quantile_with_inf` (copied verbatim from step 4) → `density_ratio_weights` (copied verbatim) → `WeightedCAFHTLastStep` class per § 2.4. No ACI class, no D_ACI.
 
 **Inline tests**:
 - The two duplicated helpers produce bit-identical output to the step-4 versions on a fixed-seed input.
@@ -377,9 +353,9 @@ Inline order: `weighted_quantile_with_inf` (copied verbatim from step 4) → `de
 Why medical first: smallest sample size, fastest per-seed wall time, and we have the most experience tuning the LR step here. For each runner:
 
 - Import `medical_data.py` for the loader and constants.
-- Copy `LinearCovariateModel` (whole-traj) or implement `LastStepRidge` (last-step) inline per § 4.
-- Define `featurize_x1` (whole-traj) or `featurize_xall` (last-step) inline per § 4.3.
-- For whole-traj only: implement the **four-way data partition** (D_ACI + D_tr + D_cal + D_test) per § 3.0 — peel D_ACI off the raw patient pool **before** the conventional D_tr / D_cal / D_test split; fit predictors on the **full** D_tr; precompute the D_ACI score bank by applying the fitted predictors to D_ACI and storing absolute residuals; the internal D_tr^(1) / D_tr^(2) / D_tr^(3) split for γ selection lives inside the algorithm class, not the runner.
+- Copy `LinearCovariateModel` (whole-traj) or implement `LastStepRidge` (last-step) inline per § 3.
+- Define `featurize_x1` (whole-traj) or `featurize_xall` (last-step) inline per § 3.3.
+- For whole-traj only: implement the **four-way data partition** (D_ACI + D_tr + D_cal + D_test) per § 2.0 — peel D_ACI off the raw patient pool **before** the conventional D_tr / D_cal / D_test split; fit predictors on the **full** D_tr; precompute the D_ACI score bank by applying the fitted predictors to D_ACI and storing absolute residuals; the internal D_tr^(1) / D_tr^(2) / D_tr^(3) split for γ selection lives inside the algorithm class, not the runner.
 - Build the main loop calling the appropriate `core/weighted_cafht_*` class.
 - CLI matches the existing `medical/OLD_medical_conformal.py` flags (`--pkl`, `--n_traincal`, `--n_test`, `--alpha`, `--mode {full,uniform,zerog}`, `--seed`, `--save_json`, `--save_plot`), plus `--frac_aci 0.15 --gamma_split 0.33 0.33 0.34` for whole-traj.
 - Then write `multi_seed_medical_{whole,last}.py` as thin 10-seed wrappers around the runner.
@@ -443,9 +419,9 @@ Steps 6, 7, 8, 9 are independent after step 5; they can be parallelized across r
 
 ---
 
-## 6. Experiment plan and table layout
+## 5. Experiment plan and table layout
 
-### 6.1 Conditions
+### 5.1 Conditions
 
 Each domain × regime is run with three ablation conditions, matching v1 of the project:
 
@@ -455,9 +431,9 @@ Each domain × regime is run with three ablation conditions, matching v1 of the 
 | `uniform` | LR off (uniform weights), ACI on | uniform calibration weights | uniform calibration weights |
 | `zerog` | LR on, ACI off (γ=0) | LR weights, γ=0 | **not applicable** (no γ) |
 
-So **3 conditions × whole-trajectory + 2 conditions × last-step = 5 conditions per domain**, times 3 domains = 15 saved JSON families. Synthetic is replicated over 30 seeds per condition; finance over 13 rolling windows × 2 sectors (78 finance whole-traj runs) + mixed null; medical over 10 seeds. Exact size table TBD with Q1.
+So **3 conditions × whole-trajectory + 2 conditions × last-step = 5 conditions per domain**, times 3 domains = 15 saved JSON families. Synthetic is replicated over 30 seeds per condition; finance over 13 rolling windows × 2 sectors (78 finance whole-traj runs) + mixed null; medical over 10 seeds. Per Q1 (answered), all 6 (domain × regime) cells are in scope.
 
-### 6.2 Result folder schema
+### 5.2 Result folder schema
 
 ```
 results/{domain}/{regime}/json/{condition}_{detail}.json
@@ -467,7 +443,7 @@ results/{domain}/{regime}/tables/{domain}_{regime}.tex
 
 `{detail}` is dates for finance windows; nothing for synthetic / medical multi-seed.
 
-### 6.3 `run_all_experiments.sh` restructure
+### 5.3 `run_all_experiments.sh` restructure
 
 ```
 ./run_all_experiments.sh --synthetic --regime last_step
@@ -479,7 +455,7 @@ results/{domain}/{regime}/tables/{domain}_{regime}.tex
 
 Per-condition loops inside each function get a `regime=$1` argument and dispatch to the right runner. Filename stems include the regime tag for unambiguous file paths.
 
-### 6.4 `build_tex_tables.py` restructure
+### 5.4 `build_tex_tables.py` restructure
 
 - One `.tex` per (domain × regime) = 6 tables total.
 - Each table shares the existing 4-column layout `(Algorithm × Coverage × |Δ̄| × Width)` plus a leading column when the domain has a "data condition" axis (synthetic: noshift/static/dynamic; finance: tech/util/mixed).
@@ -488,9 +464,74 @@ Per-condition loops inside each function get a `regime=$1` argument and dispatch
 
 ---
 
+## 6. Clarification questions (answered)
+
+All eight questions were resolved on 2026-05-29. The original prompts and recommendations are preserved below for traceability; each ends with the user's chosen answer.
+
+**Q1. Which (domain × regime) cells do we evaluate?**
+Combinations are `{synthetic, finance, medical} × {last-step, whole-trajectory}` = 6. We have committed effort to whole-trajectory for all three domains historically. Last-step is new. Do we want all 6 cells, or only some?
+*Impact*: number of runners to write; number of result subfolders; size of LaTeX tables; CPU budget for the next sweep.
+
+**Answer:** We want all 6 cells.
+
+**Q2. LR featurizer when the shift assumption is violated.**
+The whole-trajectory algorithm assumes shift is on `X_1` only and prescribes feeding `X_1^(i)` to the classifier. For medical, the Norepinephrine split induces shift on a 12-hour window (so `X_{1:12}`) not on `X_1`. Two options:
+  (a) follow the spec literally and accept some loss of separability;
+  (b) use the entire `X_{1:T}` for the LR classifier and document the deviation.
+*Impact*: medical Alg. 1's empirical coverage. Finance has a similar question (Tech/Util shift is on the joint covariate distribution, not on X_1).
+
+**Answer:** (a).
+
+**Q3. Predictor for last-step (Alg. 2) on each domain.**
+The algorithm says "regress `Y_{T+1}` on `X_{1:T}`". For our settings:
+  - **Synthetic**: with `X_t = Y_{t-1}` (the AR(1) reinterpretation), the natural predictor is just an OLS regression of `Y_{T+1}` on the full lagged history.
+  - **Finance**: `X` is 4-dimensional × 40 days = 160 features per ticker if flattened. Options: flatten + L2-regularized linear; use only the most recent few X_t; use an RNN.
+  - **Medical**: `X` is 3-dim × 24 hours + 6 static = 78 features per patient (or 84 with NaCl history). Options: flatten + ridge; use last 12 hours only.
+*Impact*: predictor accuracy, which dominates residual magnitude and therefore interval width. **Strong recommendation: use ridge regression on flattened `X_{1:T}` with a small held-out CV for λ; defer RNNs to a later iteration.**
+
+**Answer:** Use linear predictor for all domains. Synthetic: regress `Y_{T+1}` on the full lagged history. Finance: flatten + L2-regularized linear. Medical: flatten + ridge.
+
+**Q4. γ-selection criterion in the whole-trajectory algorithm.**
+The algorithm box says "Run the simple ACI method with training set D_tr^(1), calibration set D_tr^(2), and test set D_tr^(3). Record the performance" and pick γ with "best performance"; CAFHT's own implementation picks γ by minimum mean band width (`CAFHT/ConformalizedTS/methods.py:393`); our pre-v2 `_select_gamma` in medical/finance picked γ by "tail-half coverage closest to 1−α". **Recommendation: match CAFHT — run the simple-ACI procedure exactly as the algorithm box specifies (train = D_tr^(1), cal = D_tr^(2), test = D_tr^(3); the score bank for this sandbox ACI is built from D_tr^(2) residuals — *not* D_ACI), measure mean band width on D_tr^(3), and pick the γ with minimum mean width.**
+
+**Answer:** Yes. Let's do minimum mean width.
+
+**Q5. Treatment of legacy `core/algorithm.py:AdaptedCAFHT` and per-domain runners.**
+The user has chosen the rename-with-`OLD_`-prefix approach (see § 0 ground rules and § B.1). Open sub-question: do we keep `OLD_` files committed in the repository long-term, or move them out after the new pipeline is validated and the legacy numbers are no longer needed?
+**Recommendation: keep them in tree indefinitely.** They are reference-only, no runtime cost, and useful for git-blame continuity and for paper-revision cross-checks. We can revisit deletion after the paper is submitted.
+
+**Answer:** Keep them indefinitely.
+
+**Q6. Existing `results/` JSON outputs.**
+Existing `results/{medical,finance,synthetic}/{json,pdf,tables}/` files were produced under the old AdaptedCAFHT semantics, then under the partially-fixed semantics. None of them are comparable to the new algorithms.
+Per § 0, no mass move under `results/`. New outputs land in `results/{domain}/{regime}/{json,pdf,tables}/` alongside the existing subdirs.
+Open sub-question: should the legacy `.tex` tables (`results/{domain}/tables/{domain}.tex`) be deleted, or kept and shadowed by the new ones at `results/{domain}/{regime}/tables/{domain}_{regime}.tex`?
+**Recommendation: keep the legacy `.tex` files in place; paper drafts will pull from the new paths only.**
+
+**Answer:** Keep the legacy .tex files in place; paper drafts will pull from the new paths only.
+
+**Q7. Naming.**
+Two options for the user-facing names:
+  (a) "Weighted CAFHT (whole-trajectory)" and "Weighted CAFHT (last-step)" — emphasizes shared lineage; matches the algo-box titles.
+  (b) "Weighted CAFHT" (whole-trajectory) and "Weighted Split CP" (last-step) — semantically more accurate since last-step has no per-step inner conformal loop.
+*Impact*: paper section names, table captions, file names.
+**Recommendation: (a)** — match the user's algo boxes so the paper and code share terminology.
+
+**Answer:** (a). It'll be convenient to change the algorithm name later when needed.
+
+**Q8. ACI conformity-score bank (the hidden D_ACI).**
+The whole-trajectory algorithm box runs ACI in two places in the main algorithm (per cal series to produce `ε_i`; per test series to produce `Ĉ^aci_t`) but **does not specify where the conformity scores used inside those ACI runs come from**. ACI computes its band width as a quantile of past conformity scores; without a banked score history, ACI has no quantile to draw on at step 1. This is a genuine spec gap, not an implementation detail.
+We propose adding an explicit held-out set **D_ACI** — **disjoint from D_tr, D_cal, and D_test** — whose precomputed absolute residuals `{|Y_t^(i) − Ŷ_t^(i)| : i ∈ D_ACI, t ∈ [T+1]}` are frozen as the score bank for the main-algorithm ACI invocations on D_cal and D_test. The γ-selection ACI (the simple-ACI sandbox inside `select_gamma`) is a **separate** invocation; per the algorithm box, it uses the 3-way split D_tr^(1)/D_tr^(2)/D_tr^(3) of D_tr and draws its own (internal) score bank from D_tr^(2), not from D_ACI. See § 2.0 for the resulting four-way data partition (D_ACI + D_tr + D_cal + D_test) and § 2.2/§ 2.3 for the API changes.
+*Impact*: data partition at the runner level (now four-way, with D_ACI peeled off first); class signatures (`ACI.predict_intervals`, `WeightedCAFHTWholeTrajectory.{calibration_scores, predict_bands}`) take an explicit `score_bank` argument; runner CLI gains `--frac_aci` and `--gamma_split`.
+**Recommendation: adopt the proposal as described in § 2.0.** Default: peel 15% of trajectories off the raw pool as D_ACI before splitting the remainder into D_tr / D_cal / D_test by their existing fractions; inner γ-selection split of D_tr defaults to 0.33 / 0.33 / 0.34. Algorithm 2 (last-step) does not invoke ACI, so D_ACI is not needed there.
+
+**Answer:** Adopt the proposal as described in § 2.0.
+
+---
+
 # Additional references
 
-The sections below are background material — they were primary in v1 of this plan, but in v2 they are mostly reference. Readers can skip to §D (out of scope) if they only need the implementation plan.
+The sections below are background material — they were primary in v1 of this plan, but in v2 they are mostly reference. Readers can skip to § D (out of scope) if they only need the implementation plan.
 
 ---
 
@@ -513,7 +554,7 @@ The user's note "this coincides with the previous notation by letting `X_t = Y_{
 |---|---|---|---|
 | Coverage target | per-step marginal | `P(Y_{T+1} ∈ Ĉ_{T+1}) ≥ 1−α` | `P(∀t: Y_t ∈ Ĉ_t) ≥ 1−α` |
 | Predictor | per-step refit (AR(1), or `LinearCovariateModel`) | single model `f_{T+1}` trained once: regress `Y_{T+1}` on `X_{1:T}` | per-step models `{f_t}_{t∈[T+1]}`, each regressing `Y_t` on `(Z_{1:t-1}, X_t)` |
-| γ selection | per-series ACI step inside main loop, every 5–10 steps; criterion: average coverage closest to 1−α on a 3-way training split | **not used** (no ACI in last-step) | Predictors fit on full D_tr; D_tr is then split internally into D_tr^(1)/D_tr^(2)/D_tr^(3); for each γ, run simple ACI with train=D_tr^(1), cal=D_tr^(2) (sandbox score bank), test=D_tr^(3); pick γ by **minimum mean band width** on D_tr^(3) (CAFHT convention, `CAFHT/ConformalizedTS/methods.py:393`). D_ACI is a *separate* held-out set used only by the main-algorithm ACI (cal-side + test-side), not by γ selection. Open Q4 + Q8 above. |
+| γ selection | per-series ACI step inside main loop, every 5–10 steps; criterion: average coverage closest to 1−α on a 3-way training split | **not used** (no ACI in last-step) | Predictors fit on full D_tr; D_tr is then split internally into D_tr^(1)/D_tr^(2)/D_tr^(3); for each γ, run simple ACI with train=D_tr^(1), cal=D_tr^(2) (sandbox score bank), test=D_tr^(3); pick γ by **minimum mean band width** on D_tr^(3) (CAFHT convention, `CAFHT/ConformalizedTS/methods.py:393`). D_ACI is a *separate* held-out set used only by the main-algorithm ACI (cal-side + test-side), not by γ selection. See Q4 + Q8 in § 6. |
 | Cal score | `\|Y_{t+1} - Ŷ_{t+1}\|`, single-time-step (post-v2 calibration fix) | `s(Y_{T+1}^(i), f_{T+1}(X^(i)))`, e.g. abs residual; one scalar per cal series | `ε_i = max_t max{Y_t − U_t, L_t − Y_t}` over the ACI bands run on cal series i with γ_opt (additive branch of CAFHT's `nonconf_scores`) |
 | Weighting | `p̂/(1−p̂)` from cross-half LR on prefix-summary features; normalized to sum to 1 | LR on **entire X vector** `X_{1:T}^(i)`; weights kept unnormalized for δ_∞ quantile | LR on **X_1** only (shift assumption); weights kept unnormalized for δ_∞ quantile |
 | Deployment quantile | weighted empirical CDF (no test atom) | `η_j = Quantile(Σ Ŵ_i/Σ Ŵ_k · δ_{ε_i} + Ŵ_j/Σ Ŵ_k · δ_∞, 1−α)` per test point | same formula |
@@ -529,7 +570,7 @@ The user's note "this coincides with the previous notation by letting `X_t = Y_{
   - `AdaptedCAFHT._compute_density_ratio_weights` — keep the logistic-regression + 5×-mean clip pattern but expose two things that the old impl didn't: the **raw `(W_cal, W_test)` pair** (we no longer normalize before quantile-time, because the δ_∞ atom needs all weights on the same scale) and a **caller-supplied featurizer** so X_1 (Alg. 1) and X_{1:T} (Alg. 2) can plug in.
   - `AdaptedCAFHT._weighted_quantile` — needs a new sibling that takes the test-point weight as a separate argument and inserts a δ_∞ atom; the existing function stays for legacy.
 - Per-domain *data wrangling* (medical's `_convert_to_arrays`, `_encode_ethnicity`, `ETHNICITY_MAP`; finance's sector split logic) — keep, factor out into thin loader modules.
-- `LinearCovariateModel` (both `medical_conformal.py:451` and `finance_conformal.py:228`) — keep as a per-step `f_t` for the whole-trajectory regime in those domains; for the last-step regime we will need a new predictor (see § 3.4).
+- `LinearCovariateModel` (both `medical_conformal.py:451` and `finance_conformal.py:228`) — keep as a per-step `f_t` for the whole-trajectory regime in those domains; for the last-step regime we will need a new predictor (see § 2.4).
 
 What does **not** survive:
 
@@ -607,4 +648,4 @@ These run on tiny tinker datasets (T=5, n_train=100, n_cal=50, n_test=10) and ga
 - LSTM / RNN predictors. Ridge on flattened X is the v2 baseline for the last-step regime; sequence models are a v3 question.
 - The CAFHT "multiplicative" branch of `nonconf_scores` (`adaptive=True`). v2 implements only the additive branch.
 - Importing anything from `CAFHT/ConformalizedTS/` at runtime. We mirror the routines we need; we do not import.
-- Re-running the synthetic experiment grid that v1 already produced (Group C). The synthetic sweep stays at 30 seeds but now spans two regimes; old C1–C4 results stay in their existing `results/synthetic/` subdirs per §0 and become reference numbers.
+- Re-running the synthetic experiment grid that v1 already produced (Group C). The synthetic sweep stays at 30 seeds but now spans two regimes; old C1–C4 results stay in their existing `results/synthetic/` subdirs per § 0 and become reference numbers.
