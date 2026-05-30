@@ -16,7 +16,7 @@ A running log of what is done and what is still pending. Update it whenever a mi
 - Step 2: Renamed 11 legacy files with `OLD_` prefix (2026-05-29; commit `22358a6`). Pure `git mv`, 100% similarity, no content edits. List in § B.1.
 - Step 3: Created the 14 new file stubs (2026-05-29; commit `642c4d8`), docstring-only, all byte-compile. 2 algo files + 6 runners + 4 multi-seed wrappers + `run_all_v2.sh` + `build_tex_tables_v2.py`.
 - Follow-on: marked 8 legacy per-domain run scripts `OLD_` (2026-05-29; commit `642c4d8`) — superseded by `run_all_v2.sh`. See § B.1 follow-on table.
-- Step 4: Implemented `core/weighted_cafht_whole.py` (2026-05-30; committed). All 4 inline tests + 1 end-to-end smoke pass in ~1.6 s. Reuses `OLD_algorithm.py` LR-weight + δ_∞-quantile logic and CAFHT's ACI/`nonconf_scores`; ACI draws from the frozen D_ACI bank (no warm-start). **Bank is per-time-step**: a 2-D `(n_ACI, T+1)` array, column t builds the band at step t (corrected from an earlier pooled-over-time draft, which gave a wrong time-flat width).
+- Step 4: Implemented `core/weighted_cafht_whole.py` (2026-05-30; commit `b1d2605`). All 4 inline tests + 1 end-to-end smoke pass in ~1.6 s. Reuses `OLD_algorithm.py` LR-weight + δ_∞-quantile logic and CAFHT's ACI/`nonconf_scores`; ACI draws from the frozen D_ACI bank (no warm-start). **Bank is per-time-step**: a 2-D `(n_ACI, T+1)` array, column t builds the band at step t (corrected from an earlier pooled-over-time draft, which gave a wrong time-flat width).
 
 ### Remaining milestones
 
@@ -329,7 +329,7 @@ Single sit-down with the user. Each answer feeds into the file layout (Q1, Q5, Q
 
 Touch the 14 new files (`core/weighted_cafht_{whole,last}.py`; 6 per-domain runners; 4 multi-seed wrappers; `run_all_v2.sh`; `build_tex_tables_v2.py`) with only a module docstring describing what each file will contain. **Checkpoint**: `find . -name "OLD_*"` lists 11; `find . -newer ...` for the empty stubs lists 14; nothing else changed. ✓ Verified: 11 `OLD_` files, 14 new untracked stubs, all 13 Python stubs byte-compile and `run_all_v2.sh` parses.
 
-### 4. `core/weighted_cafht_whole.py` — Algorithm 1, end-to-end  *(DONE — 2026-05-30; committed)*
+### 4. `core/weighted_cafht_whole.py` — Algorithm 1, end-to-end  *(DONE — 2026-05-30; commit `b1d2605`)*
 
 Inline order: `weighted_quantile_with_inf` → `density_ratio_weights` → `ACI` class (with `score_bank` argument per § 2.2) → `WeightedCAFHTWholeTrajectory` class (with D_ACI partition logic per § 2.0). The class exposes `select_gamma`, `calibration_scores`, `predict_bands` per § 2.3.
 
