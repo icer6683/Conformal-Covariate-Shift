@@ -14,12 +14,12 @@ A running log of what is done and what is still pending. Update it whenever a mi
 
 - Step 1: Q1–Q8 resolved (2026-05-29; see § 6 for the chosen answers).
 - Step 2: Renamed 11 legacy files with `OLD_` prefix (2026-05-29; commit `22358a6`). Pure `git mv`, 100% similarity, no content edits. List in § B.1.
-- Step 3: Created the 14 new file stubs (2026-05-29; uncommitted), docstring-only, all byte-compile. 2 algo files + 6 runners + 4 multi-seed wrappers + `run_all_v2.sh` + `build_tex_tables_v2.py`.
-- Follow-on: marked 8 legacy per-domain run scripts `OLD_` (2026-05-29; uncommitted) — superseded by `run_all_v2.sh`. See § B.1 follow-on table.
+- Step 3: Created the 14 new file stubs (2026-05-29; commit `642c4d8`), docstring-only, all byte-compile. 2 algo files + 6 runners + 4 multi-seed wrappers + `run_all_v2.sh` + `build_tex_tables_v2.py`.
+- Follow-on: marked 8 legacy per-domain run scripts `OLD_` (2026-05-29; commit `642c4d8`) — superseded by `run_all_v2.sh`. See § B.1 follow-on table.
+- Step 4: Implemented `core/weighted_cafht_whole.py` (2026-05-30; committed). All 4 inline tests + 1 end-to-end smoke pass in ~1.6 s. Reuses `OLD_algorithm.py` LR-weight + δ_∞-quantile logic and CAFHT's ACI/`nonconf_scores`; ACI draws from the frozen D_ACI bank (no warm-start). **Bank is per-time-step**: a 2-D `(n_ACI, T+1)` array, column t builds the band at step t (corrected from an earlier pooled-over-time draft, which gave a wrong time-flat width).
 
 ### Remaining milestones
 
-- **Step 4** — Implement `core/weighted_cafht_whole.py` end-to-end + inline tests (§ 4 step 4).
 - **Step 5** — Implement `core/weighted_cafht_last.py` end-to-end + inline tests (§ 4 step 5).
 - **Step 6** — Medical runner pair + 10-seed wrappers (§ 4 step 6).
 - **Step 7** — Finance runner pair, per-window (§ 4 step 7).
@@ -124,7 +124,7 @@ Both algorithm files are self-contained. The three primitives (weighted quantile
 
 **Data partition at the runner level (whole-trajectory).** The raw trajectory pool is split into **four** disjoint subsets:
 - **D_tr** — predictor fit AND γ selection. Per the algorithm box, predictors `{f_t}_{t∈[T+1]}` are fit on the **entire** D_tr by regressing `Y_t^(i)` on `(Z_{1:(t-1)}^(i), X_t^(i))` for all `i ∈ D_tr`. For γ selection, D_tr is then randomly partitioned **internally** into three parts D_tr^(1) / D_tr^(2) / D_tr^(3); for each γ ∈ Γ, run the simple ACI procedure with train = D_tr^(1), cal = D_tr^(2), test = D_tr^(3), and record the performance; γ_opt picks the best performance (min mean band width on D_tr^(3); see Q4). This 3-way split lives entirely inside D_tr and exists only for γ selection — it does **not** involve D_ACI.
-- **D_ACI** — score bank for the main-algorithm ACI runs. **Separate held-out set, disjoint from D_tr, D_cal, D_test.** Apply the fitted predictors `{f_t}` to each `i ∈ D_ACI` to get `Ŷ_t^(i)`; compute the residual array `{|Y_t^(i) − Ŷ_t^(i)| : i ∈ D_ACI, t ∈ [T+1]}` once; this array is then immutable and passed into every main-algorithm ACI call (cal-side `ε_i` on D_cal; test-side `Ĉ^aci_t` on D_test).
+- **D_ACI** — score bank for the main-algorithm ACI runs. **Separate held-out set, disjoint from D_tr, D_cal, D_test.** Apply the fitted predictors `{f_t}` to each `i ∈ D_ACI` to get `Ŷ_t^(i)`; compute the residual array `{|Y_t^(i) − Ŷ_t^(i)| : i ∈ D_ACI, t ∈ [T+1]}` once; this `(|D_ACI|, T+1)` array is then immutable and passed into every main-algorithm ACI call (cal-side `ε_i` on D_cal; test-side `Ĉ^aci_t` on D_test). **The bank is used per time step**: at ACI step t the band half-width is the `(1−α_t)`-quantile of **column t** of this array (the residuals at time t) — NOT a pool over all time steps, since residual magnitudes differ across t.
 - **D_cal** — calibration. Per the algorithm box: for each `i ∈ D_cal`, run ACI with γ_opt and the D_ACI score bank to produce bands `(L_t^(i), U_t^(i))`, then take `ε_i = max_t max{Y_t − U_t, L_t − Y_t}`.
 - **D_test** — deployment. Per the algorithm box: cross-half split, fit LR (positives = opposite half), compute η_j via weighted quantile, run ACI on each test trajectory (with D_ACI bank and γ_opt) and inflate by ±η_j.
 
@@ -180,16 +180,18 @@ class ACI:
     """
     Single-trajectory adaptive conformal inference:
         α_{t+1} = α_t + γ · (α − err_t),  clipped to (1e-6, 1 - 1e-6).
-    Conformity quantile is computed from a frozen `score_bank` (absolute residuals)
-    supplied by the caller. Predictor-agnostic: takes precomputed (y_pred, y_true)
-    trajectories for online error computation. Mirrors
-    CAFHT/ConformalizedTS/methods.py:Adaptive_Conformal_Inference but with an
-    externally-supplied score bank instead of an internally-grown buffer.
+    The band at step t is built from a frozen `score_bank` (absolute residuals)
+    supplied by the caller — specifically from COLUMN t of that bank (the
+    residuals at time t), NOT a pool over all steps. Predictor-agnostic: takes
+    precomputed (y_pred, y_true) trajectories for online error computation.
+    Mirrors CAFHT/ConformalizedTS/methods.py:Adaptive_Conformal_Inference but
+    with an externally-supplied, per-time-step score bank instead of an
+    internally-grown buffer (this removes CAFHT's warm-start entirely).
     """
     def predict_intervals(self, score_bank, y_pred, y_true, gamma, seed=...): ...
 ```
 
-`score_bank` is an `(n × (T+1))`-shaped (or flattened) array of absolute residuals supplied by the caller. The caller is responsible for what subset of trajectories it represents: during γ selection it is built from D_tr^(2) residuals (the simple-ACI sandbox); during the main-algorithm calibration and deployment phases it is built from D_ACI residuals (see § 2.0). Algorithm 2 does not need ACI, so `weighted_cafht_last.py` does not include this class.
+`score_bank` is a **2-D `(n_bank × (T+1))` array** of absolute residuals: **column t is the score pool used to build the ACI band at step t**, so the base half-width is time-varying (it tracks how residual magnitude changes along the horizon). It is NOT flattened/pooled across time — pooling would give a wrong time-flat width. The caller decides what trajectories it represents: during γ selection it is built from D_tr^(2) residuals (the simple-ACI sandbox); during the main-algorithm calibration and deployment phases it is built from D_ACI residuals (see § 2.0). Its horizon must equal the deployed trajectories' horizon. Algorithm 2 does not need ACI, so `weighted_cafht_last.py` does not include this class.
 
 ### 2.3 `core/weighted_cafht_whole.py`  (Algorithm 1)
 
@@ -323,13 +325,15 @@ Single sit-down with the user. Each answer feeds into the file layout (Q1, Q5, Q
 
 `git mv` the 11 files listed in § B.1. Update no other files. **Checkpoint**: tree shows the new names; `git status` is clean after the commit; running any of the existing `OLD_*` scripts still works (just under the new name). ✓ All 11 renamed at 100% similarity; tree clean. (Note: cross-imports between `OLD_*` files are intentionally left unfixed — these are frozen reference files, not in any active import path, per § B.1.)
 
-### 3. Skeleton new files (one commit, all empty)  *(DONE — 2026-05-29; uncommitted)*
+### 3. Skeleton new files (one commit, all empty)  *(DONE — 2026-05-29; commit `642c4d8`)*
 
 Touch the 14 new files (`core/weighted_cafht_{whole,last}.py`; 6 per-domain runners; 4 multi-seed wrappers; `run_all_v2.sh`; `build_tex_tables_v2.py`) with only a module docstring describing what each file will contain. **Checkpoint**: `find . -name "OLD_*"` lists 11; `find . -newer ...` for the empty stubs lists 14; nothing else changed. ✓ Verified: 11 `OLD_` files, 14 new untracked stubs, all 13 Python stubs byte-compile and `run_all_v2.sh` parses.
 
-### 4. `core/weighted_cafht_whole.py` — Algorithm 1, end-to-end
+### 4. `core/weighted_cafht_whole.py` — Algorithm 1, end-to-end  *(DONE — 2026-05-30; committed)*
 
 Inline order: `weighted_quantile_with_inf` → `density_ratio_weights` → `ACI` class (with `score_bank` argument per § 2.2) → `WeightedCAFHTWholeTrajectory` class (with D_ACI partition logic per § 2.0). The class exposes `select_gamma`, `calibration_scores`, `predict_bands` per § 2.3.
+
+**Implementation notes** (deviations / decisions): (a) `predict_bands` takes an extra `X_tr` arg — the algo box's classifier negatives are `{(X_1^i,0)}_{i∈D_tr}`, which the plan's original § 2.3 signature omitted. (b) Cal weights are 5×-mean clipped but the test-point weight `W_j` is kept RAW, mirroring `OLD_algorithm.predict_with_interval_oracle`, so the δ_∞ atom can fire. (c) ε_i is computed once (not per cross-half) since the ACI bands are weight-free. (d) ACI uses a flattened bank and no warm-start (the frozen D_ACI bank removes the cold-start that warm-start patched in CAFHT).
 
 **Inline tests** (at the bottom of the file under `if __name__ == "__main__"`):
 - `weighted_quantile_with_inf` with uniform weights matches `np.quantile(scores, level, interpolation='higher')`.
