@@ -17,10 +17,10 @@ A running log of what is done and what is still pending. Update it whenever a mi
 - Step 3: Created the 14 new file stubs (2026-05-29; commit `642c4d8`), docstring-only, all byte-compile. 2 algo files + 6 runners + 4 multi-seed wrappers + `run_all_v2.sh` + `build_tex_tables_v2.py`.
 - Follow-on: marked 8 legacy per-domain run scripts `OLD_` (2026-05-29; commit `642c4d8`) — superseded by `run_all_v2.sh`. See § B.1 follow-on table.
 - Step 4: Implemented `core/weighted_cafht_whole.py` (2026-05-30; commit `b1d2605`). All 4 inline tests + 1 end-to-end smoke pass in ~1.6 s. Reuses `OLD_algorithm.py` LR-weight + δ_∞-quantile logic and CAFHT's ACI/`nonconf_scores`; ACI draws from the frozen D_ACI bank (no warm-start). **Bank is per-time-step**: a 2-D `(n_ACI, T+1)` array, column t builds the band at step t (corrected from an earlier pooled-over-time draft, which gave a wrong time-flat width).
+- Step 5: Implemented `core/weighted_cafht_last.py` (2026-05-30; committed). 3 inline tests pass in ~1.3 s. The two shared helpers are byte-identical (docstrings aside) and behaviorally identical to the step-4 versions; no ACI/γ/D_ACI — a single δ_∞-corrected split-conformal interval at T+1, output shape `(n_test, 1, 2, ndim)`.
 
 ### Remaining milestones
 
-- **Step 5** — Implement `core/weighted_cafht_last.py` end-to-end + inline tests (§ 4 step 5).
 - **Step 6** — Medical runner pair + 10-seed wrappers (§ 4 step 6).
 - **Step 7** — Finance runner pair, per-window (§ 4 step 7).
 - **Step 8** — Synthetic runner pair + 30-seed wrappers (§ 4 step 8).
@@ -333,7 +333,7 @@ Touch the 14 new files (`core/weighted_cafht_{whole,last}.py`; 6 per-domain runn
 
 Inline order: `weighted_quantile_with_inf` → `density_ratio_weights` → `ACI` class (with `score_bank` argument per § 2.2) → `WeightedCAFHTWholeTrajectory` class (with D_ACI partition logic per § 2.0). The class exposes `select_gamma`, `calibration_scores`, `predict_bands` per § 2.3.
 
-**Implementation notes** (deviations / decisions): (a) `predict_bands` takes an extra `X_tr` arg — the algo box's classifier negatives are `{(X_1^i,0)}_{i∈D_tr}`, which the plan's original § 2.3 signature omitted. (b) Cal weights are 5×-mean clipped but the test-point weight `W_j` is kept RAW, mirroring `OLD_algorithm.predict_with_interval_oracle`, so the δ_∞ atom can fire. (c) ε_i is computed once (not per cross-half) since the ACI bands are weight-free. (d) ACI uses a flattened bank and no warm-start (the frozen D_ACI bank removes the cold-start that warm-start patched in CAFHT).
+**Implementation notes** (deviations / decisions): (a) `predict_bands` takes an extra `X_tr` arg — the algo box's classifier negatives are `{(X_1^i,0)}_{i∈D_tr}`, which the plan's original § 2.3 signature omitted. (b) Cal weights are 5×-mean clipped but the test-point weight `W_j` is kept RAW, mirroring `OLD_algorithm.predict_with_interval_oracle`, so the δ_∞ atom can fire. (c) ε_i is computed once (not per cross-half) since the ACI bands are weight-free. (d) ACI uses a per-time-step 2-D bank (column t builds step t's band) and no warm-start (the frozen D_ACI bank removes the cold-start that warm-start patched in CAFHT).
 
 **Inline tests** (at the bottom of the file under `if __name__ == "__main__"`):
 - `weighted_quantile_with_inf` with uniform weights matches `np.quantile(scores, level, interpolation='higher')`.
@@ -343,15 +343,18 @@ Inline order: `weighted_quantile_with_inf` → `density_ratio_weights` → `ACI`
 
 **Checkpoint**: `python -m core.weighted_cafht_whole` runs all four tests in <5 s and reports `OK`.
 
-### 5. `core/weighted_cafht_last.py` — Algorithm 2, end-to-end
+### 5. `core/weighted_cafht_last.py` — Algorithm 2, end-to-end  *(DONE — 2026-05-30; committed)*
 
 Inline order: `weighted_quantile_with_inf` (copied verbatim from step 4) → `density_ratio_weights` (copied verbatim) → `WeightedCAFHTLastStep` class per § 2.4. No ACI class, no D_ACI.
 
-**Inline tests**:
-- The two duplicated helpers produce bit-identical output to the step-4 versions on a fixed-seed input.
-- With uniform weights, `predict_bands` returns the standard split-conformal band `[Ŷ ± q_(1-α)]`.
+**Implementation notes**: (a) `predict_bands` takes `X_tr` (classifier negatives), same justified deviation as step 4. (b) Same clipped-cal / raw-test weighting so the δ_∞ atom fires. (c) `cal_data`/`test_data` use the `(pred, true)` order, matching step 4, so runner authors see one convention; `test_true` is accepted but unused (last-step has no online adaptation). (d) Output is `(n_test, 1, 2, ndim)` — horizon axis length 1 — so the runners share one coverage/width routine with the whole-trajectory regime. (e) Default `score_fn` is the ∞-norm abs residual; the symmetric `[Ŷ ± η]` box is the exact level set only for such a score.
 
-**Checkpoint**: `python -m core.weighted_cafht_last` runs all tests and reports `OK`.
+**Inline tests**:
+- The two duplicated helpers produce bit-identical output to the step-4 versions on a fixed-seed input. ✓ (also verified byte-identical with docstrings stripped via `ast`).
+- With uniform weights, `predict_bands` returns the standard split-conformal band `[Ŷ ± q_(1-α)]`. ✓
+- (extra) A dominant test weight trips the δ_∞ atom → unbounded interval. ✓
+
+**Checkpoint**: `python -m core.weighted_cafht_last` runs all tests and reports `OK`. ✓ (~1.3 s)
 
 ### 6. Medical runner pair — `medical_runner_whole.py` and `medical_runner_last.py`
 
