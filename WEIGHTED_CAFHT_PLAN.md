@@ -18,12 +18,12 @@ A running log of what is done and what is still pending. Update it whenever a mi
 - Follow-on: marked 8 legacy per-domain run scripts `OLD_` (2026-05-29; commit `642c4d8`) — superseded by `run_all_v2.sh`. See § B.1 follow-on table.
 - Step 4: Implemented `core/weighted_cafht_whole.py` (2026-05-30; commit `b1d2605`). All 4 inline tests + 1 end-to-end smoke pass in ~1.6 s. Reuses `OLD_algorithm.py` LR-weight + δ_∞-quantile logic and CAFHT's ACI/`nonconf_scores`; ACI draws from the frozen D_ACI bank (no warm-start). **Bank is per-time-step**: a 2-D `(n_ACI, T+1)` array, column t builds the band at step t (corrected from an earlier pooled-over-time draft, which gave a wrong time-flat width).
 - Step 5: Implemented `core/weighted_cafht_last.py` (2026-05-30; commit `4d7bd3f`). 3 inline tests pass in ~1.3 s. The two shared helpers are byte-identical (docstrings aside) and behaviorally identical to the step-4 versions; no ACI/γ/D_ACI — a single δ_∞-corrected split-conformal interval at T+1, output shape `(n_test, 1, 2, ndim)`.
+- Step 8 (done out of order, before 6/7, per user): Implemented the synthetic runner pair + 30-seed wrappers (2026-05-30; committed). Conditions simplified to `full` (our version) vs `uniform` (no-LR) per user — `zerog` dropped. Headline metrics: whole-traj joint coverage + mean width; last-step final coverage + mean width. **30-seed shift results** (saved under `results/synthetic/{whole_trajectory,last_step}/json/`, target 0.90): whole-traj static full **0.886** vs uniform 0.700 (LR clearly helps); whole-traj dynamic full 0.711 ≈ uniform 0.701 (Q2(a) X_1-only featurizer + unshifted X_0 → no signal); last-step static full 0.900 ≈ uniform 0.894; last-step dynamic full 0.868 vs uniform 0.814 (full path carries the shift; 17.5% δ_∞ bands). **Modeling note**: LR featurizer uses the actual Poisson/path covariate (what shifts), not Y_0; predictor is one-step-ahead pure AR(1) (whole) / OLS on Y-history (last).
 
 ### Remaining milestones
 
 - **Step 6** — Medical runner pair + 10-seed wrappers (§ 4 step 6).
 - **Step 7** — Finance runner pair, per-window (§ 4 step 7).
-- **Step 8** — Synthetic runner pair + 30-seed wrappers (§ 4 step 8).
 - **Step 9** — `run_all_v2.sh` + `build_tex_tables_v2.py` (§ 4 step 9).
 - **Step 10** — Pilot run: medical, both regimes, 10 seeds (§ 4 step 10).
 - **Step 11** — Full sweep `bash run_all_v2.sh --all` (§ 4 step 11).
@@ -376,9 +376,11 @@ Same recipe as step 6, scaled to the per-window finance loop. No multi-seed wrap
 
 **Checkpoint**: `finance_runner_whole.py --npz finance/data/sp500_20240201_20240328.npz --test_sector Technology --mode full` finishes in <90 s.
 
-### 8. Synthetic runner pair — `synthetic_runner_whole.py` and `synthetic_runner_last.py`
+### 8. Synthetic runner pair — `synthetic_runner_whole.py` and `synthetic_runner_last.py`  *(DONE — 2026-05-30; committed; done before 6/7 per user)*
 
 Smallest runtime per cell, so we leave it for last to avoid blocking step-7 debugging. The 30-seed wrappers go on top of each runner.
+
+**Implementation notes**: (a) conditions are `full` vs `uniform` only (`zerog` dropped per § 5.1). (b) LR featurizer uses the actual covariate that shifts (static: Poisson scalar; dynamic: X_0 for whole / full X-path for last), NOT Y_0 — the plan's "Y_0 (X_1 under X=Y_lag)" would be unshifted under this DGP and make the LR a no-op. (c) Predictor follows the algorithm box's observed-prefix `f̂_t`: one-step-ahead pure AR(1) (whole) and OLS of Y_T on the Y-history (last). (d) Source pool (P) → D_tr/D_ACI/D_cal; independent target pool (P̃) → D_test. (e) Headline metrics: whole-traj joint coverage + mean width; last-step final coverage + mean width (per-step profiles kept for plots). Dynamic last-step shows high δ_∞-band counts (sharp path separation) — flagged for tuning.
 
 **Checkpoint**: a 3-seed smoke run of each multi-seed wrapper completes in <60 s and produces a JSON with the new aggregated schema (per-seed coverage list, overall coverage_mean / coverage_se, etc.).
 
@@ -386,7 +388,7 @@ Smallest runtime per cell, so we leave it for last to avoid blocking step-7 debu
 
 `run_all_v2.sh`: take `OLD_run_all_experiments.sh` as a starting point, replicate its dispatch structure, and add a `--regime` flag (`last_step`, `whole_trajectory`, both). For each (domain, regime) combination, call the appropriate runner per condition (`full` / `uniform` / `zerog` where applicable). Default `PY="python"` (the conda-env issue from v1).
 
-`build_tex_tables_v2.py`: extend `OLD_build_tex_tables.py` to emit 6 tables instead of 4 — one per (domain × regime). Medical last-step table has 2 rows; all other tables have 3 rows per condition group.
+`build_tex_tables_v2.py`: extend `OLD_build_tex_tables.py` to emit 6 tables instead of 4 — one per (domain × regime). Every table now has 2 rows per data-condition group (`full`, `uniform`); the `zerog` row is dropped everywhere (§ 5.1, simplified).
 
 **Checkpoint**: `bash run_all_v2.sh --medical --regime last_step --build-tables` produces 2 JSONs (for `full` and `uniform`) and `results/medical/last_step/tables/medical_last_step.tex`.
 
@@ -429,17 +431,31 @@ Steps 6, 7, 8, 9 are independent after step 5; they can be parallelized across r
 
 ## 5. Experiment plan and table layout
 
-### 5.1 Conditions
+### 5.1 Conditions  *(simplified 2026-05-30 per user: LR vs no-LR only)*
 
-Each domain × regime is run with three ablation conditions, matching v1 of the project:
+Each (domain × regime) is run with **two** conditions — "our version" vs the
+"no-LR version" — to isolate the likelihood-ratio reweighting. The earlier
+3-condition ablation (the `zerog` / LR-only-γ=0 cell) is dropped.
 
-| Tag | What it isolates | Whole-trajectory (Alg. 1) | Last-step (Alg. 2) |
+| Tag | Role | Whole-trajectory (Alg. 1) | Last-step (Alg. 2) |
 |---|---|---|---|
-| `full` | Both LR weighting and γ-selected ACI | LR + ACI per algo | LR only (no ACI exists) |
-| `uniform` | LR off (uniform weights), ACI on | uniform calibration weights | uniform calibration weights |
-| `zerog` | LR on, ACI off (γ=0) | LR weights, γ=0 | **not applicable** (no γ) |
+| `full` | our version | LR weights + γ-selected ACI | LR weights (no ACI exists) |
+| `uniform` | no-LR version | uniform weights, ACI on | uniform weights |
 
-So **3 conditions × whole-trajectory + 2 conditions × last-step = 5 conditions per domain**, times 3 domains = 15 saved JSON families. Synthetic is replicated over 30 seeds per condition; finance over 13 rolling windows × 2 sectors (78 finance whole-traj runs) + mixed null; medical over 10 seeds. Per Q1 (answered), all 6 (domain × regime) cells are in scope.
+So **2 conditions per (domain × regime)**, times 6 cells = 12 saved JSON
+families. Synthetic is replicated over 30 seeds per condition; finance over 13
+rolling windows × 2 sectors + mixed null; medical over 10 seeds. Per Q1
+(answered), all 6 (domain × regime) cells are in scope.
+
+**Performance metrics** (the only two reported per cell):
+- Whole-trajectory: **joint coverage** — the fraction of test trajectories
+  covered at *every* step simultaneously (P(∀t: Y_t ∈ Ĉ_t)) — and **mean band
+  width**.
+- Last-step: **coverage at the final step** (fraction of Y_{T+1} in the
+  interval) and **mean band width**.
+
+(Per-step coverage/width profiles are still saved for diagnostic plots, but they
+are secondary to the two headline metrics above.)
 
 ### 5.2 Result folder schema
 
@@ -466,8 +482,8 @@ Per-condition loops inside each function get a `regime=$1` argument and dispatch
 ### 5.4 `build_tex_tables.py` restructure
 
 - One `.tex` per (domain × regime) = 6 tables total.
-- Each table shares the existing 4-column layout `(Algorithm × Coverage × |Δ̄| × Width)` plus a leading column when the domain has a "data condition" axis (synthetic: noshift/static/dynamic; finance: tech/util/mixed).
-- The medical table now has only 2 rows in the last-step regime (no `zerog`).
+- Each table reports the two headline metrics **Coverage × Width** for the two conditions (`full` = our version, `uniform` = no-LR), plus a leading column when the domain has a "data condition" axis (synthetic: noshift/static/dynamic; finance: tech/util/mixed). Whole-trajectory tables report joint coverage; last-step tables report final-step coverage.
+- Every table now has exactly **2 rows per data-condition group** (full, uniform) — the `zerog` row is gone in all regimes.
 - Cross-table comparisons (whole-trajectory full vs last-step full) are not auto-generated in this milestone; can be added later via a separate `_emit_comparison_table` helper.
 
 ---
