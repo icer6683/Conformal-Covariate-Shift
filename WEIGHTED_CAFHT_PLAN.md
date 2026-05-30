@@ -17,7 +17,7 @@ A running log of what is done and what is still pending. Update it whenever a mi
 - Step 3: Created the 14 new file stubs (2026-05-29; commit `642c4d8`), docstring-only, all byte-compile. 2 algo files + 6 runners + 4 multi-seed wrappers + `run_all_v2.sh` + `build_tex_tables_v2.py`.
 - Follow-on: marked 8 legacy per-domain run scripts `OLD_` (2026-05-29; commit `642c4d8`) — superseded by `run_all_v2.sh`. See § B.1 follow-on table.
 - Step 4: Implemented `core/weighted_cafht_whole.py` (2026-05-30; commit `b1d2605`). All 4 inline tests + 1 end-to-end smoke pass in ~1.6 s. Reuses `OLD_algorithm.py` LR-weight + δ_∞-quantile logic and CAFHT's ACI/`nonconf_scores`; ACI draws from the frozen D_ACI bank (no warm-start). **Bank is per-time-step**: a 2-D `(n_ACI, T+1)` array, column t builds the band at step t (corrected from an earlier pooled-over-time draft, which gave a wrong time-flat width).
-- Step 5: Implemented `core/weighted_cafht_last.py` (2026-05-30; committed). 3 inline tests pass in ~1.3 s. The two shared helpers are byte-identical (docstrings aside) and behaviorally identical to the step-4 versions; no ACI/γ/D_ACI — a single δ_∞-corrected split-conformal interval at T+1, output shape `(n_test, 1, 2, ndim)`.
+- Step 5: Implemented `core/weighted_cafht_last.py` (2026-05-30; commit `4d7bd3f`). 3 inline tests pass in ~1.3 s. The two shared helpers are byte-identical (docstrings aside) and behaviorally identical to the step-4 versions; no ACI/γ/D_ACI — a single δ_∞-corrected split-conformal interval at T+1, output shape `(n_test, 1, 2, ndim)`.
 
 ### Remaining milestones
 
@@ -343,7 +343,7 @@ Inline order: `weighted_quantile_with_inf` → `density_ratio_weights` → `ACI`
 
 **Checkpoint**: `python -m core.weighted_cafht_whole` runs all four tests in <5 s and reports `OK`.
 
-### 5. `core/weighted_cafht_last.py` — Algorithm 2, end-to-end  *(DONE — 2026-05-30; committed)*
+### 5. `core/weighted_cafht_last.py` — Algorithm 2, end-to-end  *(DONE — 2026-05-30; commit `4d7bd3f`)*
 
 Inline order: `weighted_quantile_with_inf` (copied verbatim from step 4) → `density_ratio_weights` (copied verbatim) → `WeightedCAFHTLastStep` class per § 2.4. No ACI class, no D_ACI.
 
