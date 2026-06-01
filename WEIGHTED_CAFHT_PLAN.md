@@ -18,11 +18,11 @@ A running log of what is done and what is still pending. Update it whenever a mi
 - Follow-on: marked 8 legacy per-domain run scripts `OLD_` (2026-05-29; commit `642c4d8`) — superseded by `run_all_v2.sh`. See § B.1 follow-on table.
 - Step 4: Implemented `core/weighted_cafht_whole.py` (2026-05-30; commit `b1d2605`). All 4 inline tests + 1 end-to-end smoke pass in ~1.6 s. Reuses `OLD_algorithm.py` LR-weight + δ_∞-quantile logic and CAFHT's ACI/`nonconf_scores`; ACI draws from the frozen D_ACI bank (no warm-start). **Bank is per-time-step**: a 2-D `(n_ACI, T+1)` array, column t builds the band at step t (corrected from an earlier pooled-over-time draft, which gave a wrong time-flat width).
 - Step 5: Implemented `core/weighted_cafht_last.py` (2026-05-30; commit `4d7bd3f`). 3 inline tests pass in ~1.3 s. The two shared helpers are byte-identical (docstrings aside) and behaviorally identical to the step-4 versions; no ACI/γ/D_ACI — a single δ_∞-corrected split-conformal interval at T+1, output shape `(n_test, 1, 2, ndim)`.
+- Step 6 (done before 7, per user): Implemented the medical runner pair + 10-seed wrappers (2026-05-30; committed). Checkpoint met (whole-traj 10 seeds ~13 s). `full` vs `uniform`; model/constants/conversion copied from `OLD_medical_conformal.py` per § B.3. **10-seed shift results** (n_traincal=1000, n_test=500, target 0.90, saved under `results/medical/{whole_trajectory,last_step}/json/`): whole-traj full **0.964** ≈ uniform 0.965, width ~1833 mL/hr (Q2(a) hour-0 featurizer can't see the Norepinephrine shift → LR a no-op; max-over-trajectory score over-covers); last-step full **0.899** (on target) width **209.5** vs uniform 0.923 width 257.0 — **LR lands on target and narrows bands ~19%** (the strong medical result). Whole-traj over-coverage + no-LR-signal flagged: relaxing Q2(a) to the full prefix (like last-step) would let LR tighten it.
 - Step 8 (done out of order, before 6/7, per user): Implemented the synthetic runner pair + 30-seed wrappers (2026-05-30; commit `89b4142`). Conditions simplified to `full` (our version) vs `uniform` (no-LR) per user — `zerog` dropped. Headline metrics: whole-traj joint coverage + mean width; last-step final coverage + mean width. **30-seed shift results** (saved under `results/synthetic/{whole_trajectory,last_step}/json/`, target 0.90): whole-traj static full **0.886** vs uniform 0.700 (LR clearly helps); whole-traj dynamic full 0.711 ≈ uniform 0.701 (Q2(a) X_1-only featurizer + unshifted X_0 → no signal); last-step static full 0.900 ≈ uniform 0.894; last-step dynamic full 0.868 vs uniform 0.814 (full path carries the shift; 17.5% δ_∞ bands). **Modeling note**: LR featurizer uses the actual Poisson/path covariate (what shifts), not Y_0; predictor is one-step-ahead pure AR(1) (whole) / OLS on Y-history (last).
 
 ### Remaining milestones
 
-- **Step 6** — Medical runner pair + 10-seed wrappers (§ 4 step 6).
 - **Step 7** — Finance runner pair, per-window (§ 4 step 7).
 - **Step 9** — `run_all_v2.sh` + `build_tex_tables_v2.py` (§ 4 step 9).
 - **Step 10** — Pilot run: medical, both regimes, 10 seeds (§ 4 step 10).
@@ -356,7 +356,9 @@ Inline order: `weighted_quantile_with_inf` (copied verbatim from step 4) → `de
 
 **Checkpoint**: `python -m core.weighted_cafht_last` runs all tests and reports `OK`. ✓ (~1.3 s)
 
-### 6. Medical runner pair — `medical_runner_whole.py` and `medical_runner_last.py`
+### 6. Medical runner pair — `medical_runner_whole.py` and `medical_runner_last.py`  *(DONE — 2026-05-30; committed; done before 7 per user)*
+
+**Implementation notes**: (a) conditions `full` vs `uniform` only (no `zerog`, per § 5.1). (b) Constants, `_encode_ethnicity`, `_convert_to_arrays`, and `LinearCovariateModel` are COPIED into both runners from `OLD_medical_conformal.py` (§ B.3); `load_data` copied too (so neither runner imports `medical_data.py`, avoiding its matplotlib import). (c) Whole-traj featurizer = hour-0 vitals + statics (9, z-scored), per Q2(a); last-step deviates from the plan's "vitals + statics only" by ALSO flattening the NaCl history into both the ridge predictor and the LR classifier (it is the most predictive feature and carries the dominant shift). (d) Classifier features are pre-built and z-scored in the runner, passed with `featurize_fn=identity` (or a constant for `uniform`). (e) Horizon = 23 (one-step-ahead over 24 hourly points). Results: whole-traj over-covers with no LR signal (0.96, Q2(a)); last-step full lands on target 0.899 and narrows ~19% vs uniform — the strong cell.
 
 Why medical first: smallest sample size, fastest per-seed wall time, and we have the most experience tuning the LR step here. For each runner:
 

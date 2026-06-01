@@ -2,11 +2,90 @@
 medical/multi_seed_medical_whole.py — 10-seed wrapper around
 medical_runner_whole (Algorithm 1, whole-trajectory).
 
-Subsamples n_traincal / n_test patients per seed from the full pool, runs
-medical_runner_whole, and aggregates coverage + width across seeds. Output
-schema matches the other multi-seed JSONs. Defaults: n_seeds=10, base_seed=1000.
-
-CLI / details: see WEIGHTED_CAFHT_PLAN.md § 4 step 6.
-
-TODO: implement per § 4 step 6.
+Subsamples n_traincal / n_test patients per seed (the per-seed subsampling
+happens inside run_single, keyed by the seed), aggregates the whole-trajectory
+JOINT coverage and mean band width, and writes one JSON. The pickle is loaded
+ONCE and shared across seeds.
 """
+
+import argparse
+import json
+import sys
+import warnings
+from pathlib import Path
+
+import numpy as np
+
+warnings.filterwarnings("ignore", category=UserWarning)
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from medical.medical_runner_whole import run_single, load_data, GAMMA_GRID  # noqa: E402
+
+
+def _se(x):
+    x = np.asarray(x, float)
+    return float(np.std(x) / np.sqrt(len(x))) if len(x) else float("nan")
+
+
+def run_multi(pkl, n_seeds, base_seed, mode, n_traincal, n_test,
+              cal_frac, frac_aci, alpha):
+    data = load_data(pkl)
+    per_seed = [
+        run_single(pkl, seed=base_seed + k, mode=mode, n_traincal=n_traincal,
+                   n_test=n_test, cal_frac=cal_frac, frac_aci=frac_aci,
+                   alpha=alpha, data=data)
+        for k in range(n_seeds)
+    ]
+    joint = [r["joint_coverage"] for r in per_seed]
+    pooled = [r["pooled_coverage"] for r in per_seed]
+    widths = [r["mean_width"] for r in per_seed]
+    fw = [w for w in widths if np.isfinite(w)]
+    cbt = np.array([r["coverage_by_time"] for r in per_seed])
+
+    return {
+        "regime": "whole_trajectory", "domain": "medical", "mode": mode,
+        "alpha": alpha, "n_seeds": int(n_seeds), "base_seed": int(base_seed),
+        "n_traincal": n_traincal, "n_test": n_test, "cal_frac": cal_frac,
+        "frac_aci": frac_aci, "target_coverage": 1.0 - alpha,
+        "per_seed_coverage": joint, "per_seed_pooled_coverage": pooled,
+        "per_seed_width": widths,
+        "per_seed_gamma_opt": [r["gamma_opt"] for r in per_seed],
+        "per_seed_n_inf": [r["n_inf"] for r in per_seed],
+        "coverage_mean": float(np.mean(joint)), "coverage_std": float(np.std(joint)),
+        "coverage_se": _se(joint),
+        "pooled_coverage_mean": float(np.mean(pooled)),
+        "width_mean": float(np.mean(fw)) if fw else float("inf"),
+        "width_std": float(np.std(fw)) if fw else float("inf"),
+        "width_se": _se(fw) if fw else float("nan"),
+        "coverage_by_time_mean": cbt.mean(axis=0).tolist(),
+    }
+
+
+def main():
+    p = argparse.ArgumentParser(description="Multi-seed medical whole-traj (Alg. 1)")
+    p.add_argument("--pkl", default="medical/sepsis_experiment_data_nacl_target.pkl")
+    p.add_argument("--mode", choices=["full", "uniform"], default="full")
+    p.add_argument("--n_seeds", type=int, default=10)
+    p.add_argument("--base_seed", type=int, default=1000)
+    p.add_argument("--n_traincal", type=int, default=1000)
+    p.add_argument("--n_test", type=int, default=500)
+    p.add_argument("--cal_frac", type=float, default=0.5)
+    p.add_argument("--frac_aci", type=float, default=0.15)
+    p.add_argument("--alpha", type=float, default=0.1)
+    p.add_argument("--save_json", default=None)
+    args = p.parse_args()
+
+    agg = run_multi(args.pkl, args.n_seeds, args.base_seed, args.mode,
+                    args.n_traincal, args.n_test, args.cal_frac, args.frac_aci,
+                    args.alpha)
+    print(f"[medical/whole/{args.mode}] {args.n_seeds} seeds: "
+          f"joint_cov={agg['coverage_mean']:.3f}±{agg['coverage_se']:.3f} "
+          f"width={agg['width_mean']:.1f} mL/hr target={agg['target_coverage']:.2f}")
+    if args.save_json:
+        Path(args.save_json).parent.mkdir(parents=True, exist_ok=True)
+        with open(args.save_json, "w") as f:
+            json.dump(agg, f, indent=2)
+        print(f"saved -> {args.save_json}")
+
+
+if __name__ == "__main__":
+    main()
