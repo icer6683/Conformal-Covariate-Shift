@@ -38,6 +38,8 @@ import numpy as np
 warnings.filterwarnings("ignore", category=UserWarning)
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from core.weighted_cafht_whole import WeightedCAFHTWholeTrajectory  # noqa: E402
+from core.weighted_cafht_whole_revised import (                # noqa: E402
+    WeightedCAFHTWholeTrajectoryRevised)                       # experimental
 
 # =============================================================================
 # Constants + data prep — copied from OLD_medical_conformal.py (§ B.3)
@@ -145,14 +147,36 @@ def featurize_x1(X, S):
     return np.hstack([X[:, 0, :], S])                # (n, 9)
 
 
+def featurize_prefix(Y, X, S, horizon):
+    """REVISED algo (REVISED_WHOLE_TRAJECTORY.md): per-step classifier features
+    (n, horizon, d). Column h summarizes the OBSERVED prefix up to hour h with
+    per-channel {mean, std, last}, concatenated with the statics S.
+
+    Deviation from the algo box's bold X_{1:t} (vitals only): we ALSO include the
+    NaCl prefix, because the dominant TrainCal↔Test shift lives in NaCl
+    (KL ≈ 0.21 vs ≤ 0.05 for the vitals). Channels = NaCl + 3 vitals = 4;
+    d = 4·3 + 6 = 18. Only the observed prefix Y_{0:h} is used (never the
+    target Y_{h+1})."""
+    n = X.shape[0]
+    chans = np.concatenate([Y, X], axis=2)           # (n, L, 1+n_cov) = NaCl+vitals
+    d = chans.shape[2] * 3 + S.shape[1]
+    feats = np.zeros((n, horizon, d))
+    for h in range(horizon):
+        pref = chans[:, :h + 1, :]                    # observed prefix up to hour h
+        feats[:, h, :] = np.hstack(
+            [pref.mean(axis=1), pref.std(axis=1), pref[:, -1, :], S])
+    return feats
+
+
 # =============================================================================
 # Single-seed experiment
 # =============================================================================
 def run_single(pkl, seed=42, mode="full", n_traincal=1000, n_test=500,
                cal_frac=0.5, frac_aci=0.15, alpha=0.1, gamma_grid=None,
-               verbose=False, data=None):
+               verbose=False, data=None, revised=False):
     """Run one seed; `mode` ∈ {full, uniform}. `data` may be a preloaded pickle
-    dict (so the multi-seed wrapper loads it once)."""
+    dict (so the multi-seed wrapper loads it once). `revised=True` uses the
+    experimental per-step-classifier Algorithm 1."""
     gamma_grid = gamma_grid if gamma_grid is not None else GAMMA_GRID
     data = data if data is not None else load_data(pkl)
     rng = np.random.default_rng(seed)
@@ -184,44 +208,68 @@ def run_single(pkl, seed=42, mode="full", n_traincal=1000, n_test=500,
     test_pred, test_true = _predict_trajectory(b, Y_te, X_te, S_te), Y_te[:, 1:, :]
     aci_pred, aci_true = _predict_trajectory(b, Y_aci, X_aci, S_aci), Y_aci[:, 1:, :]
 
-    # Classifier features, z-scored on D_tr stats (vitals + Age share no scale).
-    F_tr_raw = featurize_x1(X_tr, S_tr)
-    mu, sd = F_tr_raw.mean(0), F_tr_raw.std(0) + 1e-8
-    F_tr = (F_tr_raw - mu) / sd
-    F_cal = (featurize_x1(X_cal, S_cal) - mu) / sd
-    F_test = (featurize_x1(X_te, S_te) - mu) / sd
-
-    feat = ((lambda F: np.zeros((len(np.asarray(F)), 1))) if mode == "uniform"
-            else (lambda F: np.asarray(F)))
-
-    algo = WeightedCAFHTWholeTrajectory(
-        alpha=alpha, gamma_grid=gamma_grid, featurize_fn=feat, verbose=verbose)
-    bands = algo.predict_bands(
-        (tr_pred, tr_true), (cal_pred, cal_true), (test_pred, test_true),
-        (aci_pred, aci_true), X_tr=F_tr, X_cal=F_cal, X_test=F_test, seed=seed)
+    horizon = int(test_true.shape[1])
+    if revised:
+        # Per-step classifiers on prefix features (z-scored on D_tr stats).
+        if mode == "uniform":
+            z = lambda Yr: np.zeros((len(Yr), horizon, 1))
+            Xc_tr, Xc_cal, Xc_te = z(Y_tr), z(Y_cal), z(Y_te)
+        else:
+            Pt = featurize_prefix(Y_tr, X_tr, S_tr, horizon)
+            mu, sd = Pt.mean(axis=0), Pt.std(axis=0) + 1e-8
+            Xc_tr = (Pt - mu) / sd
+            Xc_cal = (featurize_prefix(Y_cal, X_cal, S_cal, horizon) - mu) / sd
+            Xc_te = (featurize_prefix(Y_te, X_te, S_te, horizon) - mu) / sd
+        algo = WeightedCAFHTWholeTrajectoryRevised(
+            alpha=alpha, gamma_grid=gamma_grid, featurize_fn=None, verbose=verbose)
+        bands = algo.predict_bands(
+            (tr_pred, tr_true), (cal_pred, cal_true), (test_pred, test_true),
+            (aci_pred, aci_true), Xc_tr, Xc_cal, Xc_te, seed=seed)
+    else:
+        # Original: one classifier on hour-0 vitals + statics, z-scored.
+        F_tr_raw = featurize_x1(X_tr, S_tr)
+        mu, sd = F_tr_raw.mean(0), F_tr_raw.std(0) + 1e-8
+        F_tr = (F_tr_raw - mu) / sd
+        F_cal = (featurize_x1(X_cal, S_cal) - mu) / sd
+        F_test = (featurize_x1(X_te, S_te) - mu) / sd
+        feat = ((lambda F: np.zeros((len(np.asarray(F)), 1))) if mode == "uniform"
+                else (lambda F: np.asarray(F)))
+        algo = WeightedCAFHTWholeTrajectory(
+            alpha=alpha, gamma_grid=gamma_grid, featurize_fn=feat, verbose=verbose)
+        bands = algo.predict_bands(
+            (tr_pred, tr_true), (cal_pred, cal_true), (test_pred, test_true),
+            (aci_pred, aci_true), X_tr=F_tr, X_cal=F_cal, X_test=F_test, seed=seed)
 
     metrics = _coverage_metrics(bands, test_true, alpha)
     return {
         "regime": "whole_trajectory", "domain": "medical", "mode": mode,
+        "revised": bool(revised),
         "alpha": alpha, "seed": int(seed),
         "n_tr": len(tr_i), "n_aci": len(aci_i), "n_cal": len(cal_i),
-        "n_test": len(te_idx), "horizon": int(test_true.shape[1]),
+        "n_test": len(te_idx), "horizon": horizon,
         "gamma_opt": algo.gamma_opt_, "n_inf": int(algo.n_inf_),
         "score_bank_shape": list(algo.score_bank_shape_), **metrics,
     }
 
 
 def _coverage_metrics(bands, truth, alpha):
-    """bands (n, H, 2, 1); truth (n, H, 1). Whole-trajectory JOINT coverage +
-    width over finite bands; δ_∞ bands counted as covered, excluded from width."""
+    """bands (n, H, 2, 1); truth (n, H, 1). Whole-trajectory JOINT coverage, but
+    OMITTING the first ceil(H/10) steps — a trajectory counts as covered iff
+    every step from the first non-omitted one to the end is covered (skips the
+    ACI cold-start warm-up). Width over finite bands; δ_∞ bands counted as
+    covered, excluded from width. The un-omitted joint rate is kept for reference."""
     low, high, y = bands[:, :, 0, 0], bands[:, :, 1, 0], truth[:, :, 0]
     covered = (y >= low) & (y <= high)
     widths = high - low
     finite = np.isfinite(widths)
+    n_omit = int(np.ceil(covered.shape[1] / 10))      # first 1/10 (round up)
+    joint = float(covered[:, n_omit:].all(axis=1).mean())
     return {
         "coverage_by_time": covered.mean(axis=0).tolist(),
-        "joint_coverage": float(covered.all(axis=1).mean()),
-        "overall_coverage": float(covered.all(axis=1).mean()),
+        "joint_coverage": joint,                      # omit first 1/10
+        "overall_coverage": joint,
+        "joint_coverage_full": float(covered.all(axis=1).mean()),  # all steps, reference
+        "n_omit": n_omit,
         "pooled_coverage": float(covered.mean()),
         "mean_width": float(widths[finite].mean()) if finite.any() else float("inf"),
         "target_coverage": 1.0 - alpha,
@@ -239,14 +287,17 @@ def main():
     p.add_argument("--alpha", type=float, default=0.1)
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--save_json", default=None)
+    p.add_argument("--revised", action="store_true",
+                   help="experimental per-step-classifier Algorithm 1")
     p.add_argument("--verbose", action="store_true")
     args = p.parse_args()
 
     res = run_single(args.pkl, seed=args.seed, mode=args.mode,
                      n_traincal=args.n_traincal, n_test=args.n_test,
                      cal_frac=args.cal_frac, frac_aci=args.frac_aci,
-                     alpha=args.alpha, verbose=args.verbose)
-    print(f"[medical/whole/{args.mode}] joint_cov={res['joint_coverage']:.3f} "
+                     alpha=args.alpha, verbose=args.verbose, revised=args.revised)
+    print(f"[medical/whole/{args.mode}{'/REVISED' if args.revised else ''}] "
+          f"joint_cov={res['joint_coverage']:.3f} "
           f"pooled_cov={res['pooled_coverage']:.3f} "
           f"mean_width={res['mean_width']:.2f} mL/hr "
           f"gamma_opt={res['gamma_opt']} n_inf={res['n_inf']}")

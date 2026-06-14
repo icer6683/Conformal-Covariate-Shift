@@ -27,13 +27,13 @@ def _se(x):
 
 
 def run_multi(n_seeds, base_seed, covariate_mode, with_shift, mode, T,
-              n_tr, n_aci, n_cal, n_test, alpha, params):
+              n_tr, n_aci, n_cal, n_test, alpha, params, revised=False):
     per_seed = []
     for k in range(n_seeds):
         per_seed.append(run_single(
             seed=base_seed + k, covariate_mode=covariate_mode, with_shift=with_shift,
             mode=mode, T=T, n_tr=n_tr, n_aci=n_aci, n_cal=n_cal, n_test=n_test,
-            alpha=alpha, params=params, verbose=False))
+            alpha=alpha, params=params, verbose=False, revised=revised))
 
     joint = [r["joint_coverage"] for r in per_seed]
     pooled = [r["pooled_coverage"] for r in per_seed]
@@ -46,6 +46,7 @@ def run_multi(n_seeds, base_seed, covariate_mode, with_shift, mode, T,
     return {
         "regime": "whole_trajectory", "domain": "synthetic", "mode": mode,
         "covariate_mode": covariate_mode, "with_shift": bool(with_shift),
+        "revised": bool(revised),
         "alpha": alpha, "T": int(T), "n_seeds": int(n_seeds),
         "base_seed": int(base_seed), "n_tr": n_tr, "n_aci": n_aci,
         "n_cal": n_cal, "n_test": n_test, "target_coverage": 1.0 - alpha,
@@ -89,6 +90,7 @@ def main():
     p.add_argument("--x_rate", type=float, default=0.6)
     p.add_argument("--x_rate_shift", type=float, default=0.9)
     p.add_argument("--save_json", type=str, default=None)
+    p.add_argument("--revised", action="store_true")
     args = p.parse_args()
 
     params = _default_params(args.covariate_mode)
@@ -98,9 +100,10 @@ def main():
 
     agg = run_multi(args.n_seeds, args.base_seed, args.covariate_mode, args.with_shift,
                     args.mode, args.T, args.n_tr, args.n_aci, args.n_cal, args.n_test,
-                    args.alpha, params)
+                    args.alpha, params, revised=args.revised)
     print(f"[{args.mode}/{args.covariate_mode}/"
-          f"{'shift' if args.with_shift else 'noshift'}] {args.n_seeds} seeds: "
+          f"{'shift' if args.with_shift else 'noshift'}"
+          f"{'/REVISED' if args.revised else ''}] {args.n_seeds} seeds: "
           f"joint_cov={agg['coverage_mean']:.3f}±{agg['coverage_se']:.3f} "
           f"width={agg['width_mean']:.3f} target={agg['target_coverage']:.2f}")
     if args.save_json:

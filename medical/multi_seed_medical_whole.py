@@ -27,12 +27,12 @@ def _se(x):
 
 
 def run_multi(pkl, n_seeds, base_seed, mode, n_traincal, n_test,
-              cal_frac, frac_aci, alpha):
+              cal_frac, frac_aci, alpha, revised=False):
     data = load_data(pkl)
     per_seed = [
         run_single(pkl, seed=base_seed + k, mode=mode, n_traincal=n_traincal,
                    n_test=n_test, cal_frac=cal_frac, frac_aci=frac_aci,
-                   alpha=alpha, data=data)
+                   alpha=alpha, data=data, revised=revised)
         for k in range(n_seeds)
     ]
     joint = [r["joint_coverage"] for r in per_seed]
@@ -43,6 +43,7 @@ def run_multi(pkl, n_seeds, base_seed, mode, n_traincal, n_test,
 
     return {
         "regime": "whole_trajectory", "domain": "medical", "mode": mode,
+        "revised": bool(revised),
         "alpha": alpha, "n_seeds": int(n_seeds), "base_seed": int(base_seed),
         "n_traincal": n_traincal, "n_test": n_test, "cal_frac": cal_frac,
         "frac_aci": frac_aci, "target_coverage": 1.0 - alpha,
@@ -72,12 +73,14 @@ def main():
     p.add_argument("--frac_aci", type=float, default=0.15)
     p.add_argument("--alpha", type=float, default=0.1)
     p.add_argument("--save_json", default=None)
+    p.add_argument("--revised", action="store_true")
     args = p.parse_args()
 
     agg = run_multi(args.pkl, args.n_seeds, args.base_seed, args.mode,
                     args.n_traincal, args.n_test, args.cal_frac, args.frac_aci,
-                    args.alpha)
-    print(f"[medical/whole/{args.mode}] {args.n_seeds} seeds: "
+                    args.alpha, revised=args.revised)
+    print(f"[medical/whole/{args.mode}{'/REVISED' if args.revised else ''}] "
+          f"{args.n_seeds} seeds: "
           f"joint_cov={agg['coverage_mean']:.3f}±{agg['coverage_se']:.3f} "
           f"width={agg['width_mean']:.1f} mL/hr target={agg['target_coverage']:.2f}")
     if args.save_json:

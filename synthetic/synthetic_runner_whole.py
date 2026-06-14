@@ -43,6 +43,8 @@ warnings.filterwarnings("ignore", category=UserWarning)
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from core.ts_generator import TimeSeriesGenerator              # noqa: E402
 from core.weighted_cafht_whole import WeightedCAFHTWholeTrajectory  # noqa: E402
+from core.weighted_cafht_whole_revised import (                # noqa: E402
+    WeightedCAFHTWholeTrajectoryRevised)                       # experimental
 
 # Synthetic γ-grid (WEIGHTED_CAFHT_PLAN.md § "Gamma selection").
 GAMMA_GRID = [0.001, 0.005, 0.01, 0.05, 0.1]
@@ -112,13 +114,52 @@ def featurize_x1(X, covariate_mode):
     return X[:, 0:1]                                   # dynamic: X_0
 
 
+def featurize_prefix(Y, X, covariate_mode, horizon):
+    """REVISED algo (REVISED_WHOLE_TRAJECTORY.md): per-step classifier features
+    (n, horizon, d). Column h summarizes the OBSERVED prefix up to step h — the
+    TARGET prefix Y_{0:h} (never Y_{h+1}, the value being predicted) plus the
+    covariate prefix — with per-channel {mean, std, last}.
+
+    Including the Y prefix gives the classifier the shift signal that propagates
+    into the response (higher X ⇒ higher Y level); under static-X the constant
+    covariate alone is time-invariant, so the Y prefix is what makes p̂_t vary
+    with t. Channels: static = Y-prefix (3) + X scalar (1) = 4; dynamic =
+    Y-prefix (3) + X-prefix (3) = 6."""
+    Yc = np.asarray(Y, float)[:, :, 0]                 # (n, L)
+    X = np.asarray(X, float)
+    n = Yc.shape[0]
+    if covariate_mode == "static":
+        x_scalar = X.reshape(n)                        # constant covariate
+        feats = np.zeros((n, horizon, 4))
+        for h in range(horizon):
+            yp = Yc[:, :h + 1]                         # Y_{0:h} (excludes Y_{h+1})
+            feats[:, h, 0] = yp.mean(axis=1)
+            feats[:, h, 1] = yp.std(axis=1)
+            feats[:, h, 2] = yp[:, -1]
+            feats[:, h, 3] = x_scalar
+        return feats
+    feats = np.zeros((n, horizon, 6))
+    for h in range(horizon):
+        yp = Yc[:, :h + 1]                             # Y_{0:h}
+        xp = X[:, :h + 1]                              # X_{0:h}
+        feats[:, h, 0] = yp.mean(axis=1)
+        feats[:, h, 1] = yp.std(axis=1)
+        feats[:, h, 2] = yp[:, -1]
+        feats[:, h, 3] = xp.mean(axis=1)
+        feats[:, h, 4] = xp.std(axis=1)
+        feats[:, h, 5] = xp[:, -1]
+    return feats
+
+
 # =============================================================================
 # Single-seed experiment
 # =============================================================================
 def run_single(seed, covariate_mode="static", with_shift=True, mode="full",
                T=20, n_tr=300, n_aci=150, n_cal=300, n_test=200,
-               alpha=0.1, params=None, gamma_grid=None, verbose=False):
-    """Run one seed and return a results dict. `mode` ∈ {full, uniform}."""
+               alpha=0.1, params=None, gamma_grid=None, verbose=False,
+               revised=False):
+    """Run one seed and return a results dict. `mode` ∈ {full, uniform}.
+    `revised=True` uses the experimental per-step-classifier Algorithm 1."""
     params = params or _default_params(covariate_mode)
     gamma_grid = gamma_grid if gamma_grid is not None else GAMMA_GRID
 
@@ -139,24 +180,41 @@ def run_single(seed, covariate_mode="static", with_shift=True, mode="full",
     test_pred, test_true = predict(Y_test), Y_test[:, 1:, :]
     aci_pred, aci_true = predict(Y_aci), Y_aci[:, 1:, :]
 
-    # Two conditions, both with ACI on. uniform => constant features so the LR
-    # classifier sees no signal => uniform weights ("no-LR"); full => real
-    # X-based featurizer ("our version").
-    if mode == "uniform":
-        feat = lambda X: np.zeros((len(np.asarray(X)), 1))
-    else:  # full
-        feat = lambda X: featurize_x1(X, covariate_mode)
-
-    algo = WeightedCAFHTWholeTrajectory(
-        alpha=alpha, gamma_grid=gamma_grid, featurize_fn=feat, verbose=verbose)
-    bands = algo.predict_bands(
-        (tr_pred, tr_true), (cal_pred, cal_true), (test_pred, test_true),
-        (aci_pred, aci_true), X_tr=X_tr, X_cal=X_cal, X_test=X_test, seed=seed)
+    horizon = tr_true.shape[1]
+    if revised:
+        # Per-step classifiers on prefix features (z-scored on D_tr stats).
+        # uniform => constant (zero) features => uniform per-step weights.
+        if mode == "uniform":
+            z = lambda Xr: np.zeros((len(np.asarray(Xr)), horizon, 1))
+            Xc_tr, Xc_cal, Xc_te = z(X_tr), z(X_cal), z(X_test)
+        else:
+            Pt = featurize_prefix(Y_tr, X_tr, covariate_mode, horizon)
+            mu, sd = Pt.mean(axis=0), Pt.std(axis=0) + 1e-8
+            Xc_tr = (Pt - mu) / sd
+            Xc_cal = (featurize_prefix(Y_cal, X_cal, covariate_mode, horizon) - mu) / sd
+            Xc_te = (featurize_prefix(Y_test, X_test, covariate_mode, horizon) - mu) / sd
+        algo = WeightedCAFHTWholeTrajectoryRevised(
+            alpha=alpha, gamma_grid=gamma_grid, featurize_fn=None, verbose=verbose)
+        bands = algo.predict_bands(
+            (tr_pred, tr_true), (cal_pred, cal_true), (test_pred, test_true),
+            (aci_pred, aci_true), Xc_tr, Xc_cal, Xc_te, seed=seed)
+    else:
+        # Original: one classifier on X_1. uniform => constant features.
+        if mode == "uniform":
+            feat = lambda X: np.zeros((len(np.asarray(X)), 1))
+        else:  # full
+            feat = lambda X: featurize_x1(X, covariate_mode)
+        algo = WeightedCAFHTWholeTrajectory(
+            alpha=alpha, gamma_grid=gamma_grid, featurize_fn=feat, verbose=verbose)
+        bands = algo.predict_bands(
+            (tr_pred, tr_true), (cal_pred, cal_true), (test_pred, test_true),
+            (aci_pred, aci_true), X_tr=X_tr, X_cal=X_cal, X_test=X_test, seed=seed)
 
     metrics = _coverage_metrics(bands, test_true, alpha)
     return {
         "regime": "whole_trajectory", "domain": "synthetic", "mode": mode,
         "covariate_mode": covariate_mode, "with_shift": bool(with_shift),
+        "revised": bool(revised),
         "alpha": alpha, "seed": int(seed), "T": int(T),
         "n_tr": n_tr, "n_aci": n_aci, "n_cal": n_cal, "n_test": n_test,
         "gamma_opt": algo.gamma_opt_, "n_inf": int(algo.n_inf_),
@@ -167,9 +225,11 @@ def run_single(seed, covariate_mode="static", with_shift=True, mode="full",
 
 def _coverage_metrics(bands, truth, alpha):
     """bands (n, T, 2, 1); truth (n, T, 1). Whole-trajectory coverage is the
-    JOINT (all-steps) rate; we also report the per-step profile and widths
-    (over finite bands; δ_∞ bands are counted as covered but excluded from the
-    width mean)."""
+    JOINT rate, but we OMIT the first ceil(T/10) steps: a trajectory counts as
+    covered iff every step from the first non-omitted one to the end is covered
+    (skips the ACI cold-start warm-up). We also report the per-step profile,
+    widths (over finite bands; δ_∞ bands counted as covered but excluded from the
+    width mean), and the un-omitted joint rate for reference."""
     low = bands[:, :, 0, 0]
     high = bands[:, :, 1, 0]
     y = truth[:, :, 0]
@@ -177,14 +237,19 @@ def _coverage_metrics(bands, truth, alpha):
     widths = high - low
     finite = np.isfinite(widths)
 
+    n_omit = int(np.ceil(covered.shape[1] / 10))      # first 1/10 (round up)
+    joint = float(covered[:, n_omit:].all(axis=1).mean())
+
     width_by_time = [
         float(widths[finite[:, t], t].mean()) if finite[:, t].any() else float("inf")
         for t in range(widths.shape[1])
     ]
     return {
         "coverage_by_time": covered.mean(axis=0).tolist(),  # per-step pooled
-        "joint_coverage": float(covered.all(axis=1).mean()),  # whole-traj target
-        "overall_coverage": float(covered.all(axis=1).mean()),
+        "joint_coverage": joint,                      # whole-traj target (omit first 1/10)
+        "overall_coverage": joint,
+        "joint_coverage_full": float(covered.all(axis=1).mean()),  # all steps, reference
+        "n_omit": n_omit,
         "pooled_coverage": float(covered.mean()),
         "width_by_time": width_by_time,
         "mean_width": float(widths[finite].mean()) if finite.any() else float("inf"),
@@ -222,6 +287,8 @@ def main():
     p.add_argument("--x_rate", type=float, default=0.6)
     p.add_argument("--x_rate_shift", type=float, default=0.9)
     p.add_argument("--save_json", type=str, default=None)
+    p.add_argument("--revised", action="store_true",
+                   help="experimental per-step-classifier Algorithm 1")
     p.add_argument("--verbose", action="store_true")
     args = p.parse_args()
 
@@ -234,9 +301,10 @@ def main():
                      with_shift=args.with_shift, mode=args.mode, T=args.T,
                      n_tr=args.n_tr, n_aci=args.n_aci, n_cal=args.n_cal,
                      n_test=args.n_test, alpha=args.alpha, params=params,
-                     verbose=args.verbose)
+                     verbose=args.verbose, revised=args.revised)
     print(f"[{args.mode}/{args.covariate_mode}/"
-          f"{'shift' if args.with_shift else 'noshift'}] "
+          f"{'shift' if args.with_shift else 'noshift'}"
+          f"{'/REVISED' if args.revised else ''}] "
           f"joint_cov={res['joint_coverage']:.3f} "
           f"pooled_cov={res['pooled_coverage']:.3f} "
           f"mean_width={res['mean_width']:.3f} "

@@ -43,6 +43,8 @@ import numpy as np
 warnings.filterwarnings("ignore", category=UserWarning)
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from core.weighted_cafht_whole import WeightedCAFHTWholeTrajectory  # noqa: E402
+from core.weighted_cafht_whole_revised import (                     # noqa: E402
+    WeightedCAFHTWholeTrajectoryRevised)                            # experimental
 from finance.finance_data import load_stored                        # noqa: E402
 
 GAMMA_GRID = [0.001, 0.005, 0.01, 0.05, 0.1]   # finance whole-traj default grid
@@ -102,15 +104,38 @@ def featurize_x1(X):
     return X[:, 1, :]                                  # (n, 4)
 
 
+def featurize_prefix(Y, X, horizon):
+    """REVISED algo (REVISED_WHOLE_TRAJECTORY.md): per-step classifier features
+    (n, horizon, d). Column h summarizes the observed prefix at the point of
+    predicting Y_{h+1}: the covariate prefix X_{1:h+1} (steps 1..h+1 — skips the
+    structurally-zero day 0, includes the contemporaneous X_{h+1}) and the TARGET
+    prefix Y_{0:h} (excludes Y_{h+1}, the value being predicted). Per-channel
+    {mean, std, last}; d = n_cov·3 + 3."""
+    Yc = np.asarray(Y, float)[:, :, 0]                 # (n, L)
+    X = np.asarray(X, float)                           # (n, L, n_cov)
+    n, L, n_cov = X.shape
+    feats = np.zeros((n, horizon, n_cov * 3 + 3))
+    for h in range(horizon):
+        xp = X[:, 1:h + 2, :]                          # X_{1:h+1} (incl. contemporaneous)
+        yp = Yc[:, :h + 1]                             # Y_{0:h} (excludes target)
+        feats[:, h, :] = np.concatenate([
+            xp.mean(axis=1), xp.std(axis=1), xp[:, -1, :],
+            yp.mean(axis=1, keepdims=True), yp.std(axis=1, keepdims=True),
+            yp[:, -1:],
+        ], axis=1)
+    return feats
+
+
 # =============================================================================
 # Single-window experiment
 # =============================================================================
 def run_single(npz, json_path=None, test_sector="Technology", mode="full",
                cal_frac=0.5, frac_aci=0.15, alpha=0.1, seed=42,
                gamma_grid=None, gamma_split=None, mixed=False, mixed_test_frac=0.15,
-               verbose=False, data=None):
+               verbose=False, data=None, revised=False):
     """Run one rolling window; `mode` ∈ {full, uniform}. `data` may be a
-    preloaded result dict (so a caller can load the .npz once)."""
+    preloaded result dict (so a caller can load the .npz once).
+    `revised=True` uses the experimental per-step-classifier Algorithm 1."""
     gamma_grid = gamma_grid if gamma_grid is not None else GAMMA_GRID
     data = data if data is not None else load_stored(npz, json_path)
     Y, X = np.asarray(data["Y"], float), np.asarray(data["X"], float)
@@ -158,27 +183,46 @@ def run_single(npz, json_path=None, test_sector="Technology", mode="full",
     test_pred, test_true = _predict_trajectory(b, X_te), Y_te[:, 1:, :]
     aci_pred, aci_true = _predict_trajectory(b, X_aci), Y_aci[:, 1:, :]
 
-    # ── Classifier features (day-2 covariates), z-scored on D_tr stats ────────
-    F_tr_raw = featurize_x1(X_tr)
-    mu, sd = F_tr_raw.mean(0), F_tr_raw.std(0) + 1e-8
-    F_tr = (F_tr_raw - mu) / sd
-    F_cal = (featurize_x1(X_cal) - mu) / sd
-    F_test = (featurize_x1(X_te) - mu) / sd
-
-    feat = ((lambda F: np.zeros((len(np.asarray(F)), 1))) if mode == "uniform"
-            else (lambda F: np.asarray(F)))
-
     gs = tuple(gamma_split) if gamma_split is not None else (0.33, 0.33, 0.34)
-    algo = WeightedCAFHTWholeTrajectory(
-        alpha=alpha, gamma_grid=gamma_grid, featurize_fn=feat,
-        gamma_split=gs, verbose=verbose)
-    bands = algo.predict_bands(
-        (tr_pred, tr_true), (cal_pred, cal_true), (test_pred, test_true),
-        (aci_pred, aci_true), X_tr=F_tr, X_cal=F_cal, X_test=F_test, seed=seed)
+    horizon = tr_true.shape[1]
+    if revised:
+        # Per-step classifiers on prefix features (z-scored on D_tr stats).
+        # uniform => constant (zero) features => uniform per-step weights.
+        if mode == "uniform":
+            z = lambda Xr: np.zeros((len(np.asarray(Xr)), horizon, 1))
+            Xc_tr, Xc_cal, Xc_te = z(X_tr), z(X_cal), z(X_te)
+        else:
+            Pt = featurize_prefix(Y_tr, X_tr, horizon)
+            mu, sd = Pt.mean(axis=0), Pt.std(axis=0) + 1e-8
+            Xc_tr = (Pt - mu) / sd
+            Xc_cal = (featurize_prefix(Y_cal, X_cal, horizon) - mu) / sd
+            Xc_te = (featurize_prefix(Y_te, X_te, horizon) - mu) / sd
+        algo = WeightedCAFHTWholeTrajectoryRevised(
+            alpha=alpha, gamma_grid=gamma_grid, featurize_fn=None,
+            gamma_split=gs, verbose=verbose)
+        bands = algo.predict_bands(
+            (tr_pred, tr_true), (cal_pred, cal_true), (test_pred, test_true),
+            (aci_pred, aci_true), Xc_tr, Xc_cal, Xc_te, seed=seed)
+    else:
+        # Original: one classifier on X_1 (day-2 covariates), z-scored on D_tr.
+        F_tr_raw = featurize_x1(X_tr)
+        mu, sd = F_tr_raw.mean(0), F_tr_raw.std(0) + 1e-8
+        F_tr = (F_tr_raw - mu) / sd
+        F_cal = (featurize_x1(X_cal) - mu) / sd
+        F_test = (featurize_x1(X_te) - mu) / sd
+        feat = ((lambda F: np.zeros((len(np.asarray(F)), 1))) if mode == "uniform"
+                else (lambda F: np.asarray(F)))
+        algo = WeightedCAFHTWholeTrajectory(
+            alpha=alpha, gamma_grid=gamma_grid, featurize_fn=feat,
+            gamma_split=gs, verbose=verbose)
+        bands = algo.predict_bands(
+            (tr_pred, tr_true), (cal_pred, cal_true), (test_pred, test_true),
+            (aci_pred, aci_true), X_tr=F_tr, X_cal=F_cal, X_test=F_test, seed=seed)
 
     metrics = _coverage_metrics(bands, test_true, alpha)
     return {
         "regime": "whole_trajectory", "domain": "finance", "mode": mode,
+        "revised": bool(revised),
         "test_sector": display_sector, "mixed": bool(mixed),
         "npz": str(npz), "alpha": alpha, "seed": int(seed),
         "n_tr": len(tr_idx), "n_aci": len(aci_idx), "n_cal": len(cal_idx),
@@ -189,16 +233,23 @@ def run_single(npz, json_path=None, test_sector="Technology", mode="full",
 
 
 def _coverage_metrics(bands, truth, alpha):
-    """bands (n, H, 2, 1); truth (n, H, 1). Whole-trajectory JOINT coverage +
-    width over finite bands; δ_∞ bands counted as covered, excluded from width."""
+    """bands (n, H, 2, 1); truth (n, H, 1). Whole-trajectory JOINT coverage, but
+    OMITTING the first ceil(H/10) steps — a trajectory counts as covered iff
+    every step from the first non-omitted one to the end is covered (skips the
+    ACI cold-start warm-up). Width over finite bands; δ_∞ bands counted as
+    covered, excluded from width. The un-omitted joint rate is kept for reference."""
     low, high, y = bands[:, :, 0, 0], bands[:, :, 1, 0], truth[:, :, 0]
     covered = (y >= low) & (y <= high)
     widths = high - low
     finite = np.isfinite(widths)
+    n_omit = int(np.ceil(covered.shape[1] / 10))      # first 1/10 (round up)
+    joint = float(covered[:, n_omit:].all(axis=1).mean())
     return {
         "coverage_by_time": covered.mean(axis=0).tolist(),
-        "joint_coverage": float(covered.all(axis=1).mean()),
-        "overall_coverage": float(covered.all(axis=1).mean()),
+        "joint_coverage": joint,                      # omit first 1/10
+        "overall_coverage": joint,
+        "joint_coverage_full": float(covered.all(axis=1).mean()),  # all steps, reference
+        "n_omit": n_omit,
         "pooled_coverage": float(covered.mean()),
         "mean_width": float(widths[finite].mean()) if finite.any() else float("inf"),
         "target_coverage": 1.0 - alpha,
@@ -223,6 +274,7 @@ def main():
                    help="Random test draw from all sectors (null / no-shift baseline).")
     p.add_argument("--mixed_test_frac", type=float, default=0.15)
     p.add_argument("--save_json", default=None)
+    p.add_argument("--revised", action="store_true")
     p.add_argument("--verbose", action="store_true")
     args = p.parse_args()
 
@@ -230,8 +282,10 @@ def main():
                      mode=args.mode, cal_frac=args.cal_frac, frac_aci=args.frac_aci,
                      alpha=args.alpha, seed=args.seed, gamma_grid=args.gamma_grid,
                      gamma_split=args.gamma_split, mixed=args.mixed,
-                     mixed_test_frac=args.mixed_test_frac, verbose=args.verbose)
-    print(f"[finance/whole/{args.mode}] sector={res['test_sector']} "
+                     mixed_test_frac=args.mixed_test_frac, verbose=args.verbose,
+                     revised=args.revised)
+    print(f"[finance/whole/{args.mode}{'/REVISED' if args.revised else ''}] "
+          f"sector={res['test_sector']} "
           f"joint_cov={res['joint_coverage']:.3f} "
           f"pooled_cov={res['pooled_coverage']:.3f} "
           f"mean_width={res['mean_width']:.4f} "
